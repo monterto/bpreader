@@ -1,0 +1,25 @@
+# Build artifacts (regenerate with build_appimage.sh / build_windows.bat)
+appimage_build/
+build/
+dist/
+*.spec
+appimagetool.AppImage
+
+# Local app state -- never something to commit; readings are personal data
+config.json
+crash.log
+readings/
+
+# The omblepy engine gets cloned fresh by the build/install scripts --
+# don't commit a copy of a dependency with its own separate license status
+omblepy/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS noise
+.DS_Store
+Thumbs.db

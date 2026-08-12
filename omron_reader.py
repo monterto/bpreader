@@ -48,6 +48,11 @@ DATA_DIR = _default_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
 
+# User-facing home for readings, kept separate from the omblepy engine's own
+# internal working folder (which also holds its backups and the engine code
+# itself -- not something a person browsing their files needs to see).
+READINGS_DIR = DATA_DIR / "readings"
+
 # BP7455CAN == Omron 10 Series == BP7450 internally == HEM-7342T in omblepy's
 # device table (confirmed by matching EEPROM layout: 200 total records / 100
 # per user across 2 user profiles, matching the BP7455CAN spec sheet).
@@ -123,6 +128,58 @@ def get_omblepy_dir():
         shutil.copytree(source, target, dirs_exist_ok=True)
     _make_importable(target / "omblepy.py")
     return target
+
+
+def _user_readings_path(user_idx):
+    """~/.local/share/bp-reader/readings/user1/user1.csv (etc). Kept in its
+    own per-user subfolder so it's obvious at a glance which file is whose,
+    even if someone copies a single CSV out of this folder elsewhere."""
+    d = READINGS_DIR / f"user{user_idx}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"user{user_idx}.csv"
+
+
+def _sync_readings_from_engine():
+    """omblepy always reads/merges/writes its CSVs inside its own engine
+    folder (see get_omblepy_dir) -- that logic is untouched and still the
+    real source of truth. After a successful sync, we copy the freshly
+    merged result out into READINGS_DIR, which is what the rest of this
+    app (and the person using it) actually looks at."""
+    omblepy_dir = get_omblepy_dir()
+    for idx in (1, 2):
+        src = omblepy_dir / f"user{idx}.csv"
+        if src.exists():
+            shutil.copy2(src, _user_readings_path(idx))
+
+
+def _migrate_legacy_readings():
+    """One-time upgrade path: earlier versions of this app read/wrote CSVs
+    directly inside the omblepy engine folder. Copy any pre-existing data
+    into the new readings/ layout so upgrading doesn't look like your
+    history vanished. Safe to run every startup -- it only ever copies
+    into a destination that doesn't exist yet, never overwrites."""
+    omblepy_dir = DATA_DIR / "omblepy"
+    for idx in (1, 2):
+        dest = _user_readings_path(idx)
+        legacy = omblepy_dir / f"user{idx}.csv"
+        if legacy.exists() and not dest.exists():
+            shutil.copy2(legacy, dest)
+
+
+def open_readings_folder():
+    """Opens READINGS_DIR in the OS's file manager. Best-effort: if nothing
+    matches (unrecognized platform, no GUI file manager available, etc.)
+    the caller gets an exception and the API surfaces it -- there's no data
+    here worth silently swallowing an error over."""
+    READINGS_DIR.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        os.startfile(str(READINGS_DIR))
+    elif sys.platform == "darwin":
+        import subprocess
+        subprocess.run(["open", str(READINGS_DIR)], check=True)
+    else:
+        import subprocess
+        subprocess.run(["xdg-open", str(READINGS_DIR)], check=True)
 
 
 def _make_importable(omblepy_py_path):
@@ -256,7 +313,10 @@ def pair_device(mac):
 
 def sync_device(mac, new_only=False, time_sync=False):
     _trust_device_linux(mac)
-    return _run_omblepy(mac, new_only=new_only, time_sync=time_sync)
+    result = _run_omblepy(mac, new_only=new_only, time_sync=time_sync)
+    if result["ok"]:
+        _sync_readings_from_engine()
+    return result
 
 
 def _read_user_csv(path):
@@ -280,12 +340,11 @@ def _read_user_csv(path):
 
 
 def load_records():
-    """Read the CSV files omblepy writes (user1.csv, user2.csv) and return
-    all readings, newest first, per user."""
-    omblepy_dir = get_omblepy_dir()
+    """Read the per-user CSVs in READINGS_DIR and return all readings,
+    newest first, per user."""
     users = {}
     for idx in (1, 2):
-        recs = _read_user_csv(omblepy_dir / f"user{idx}.csv")
+        recs = _read_user_csv(_user_readings_path(idx))
         recs.sort(key=lambda r: r["datetime"], reverse=True)
         users[f"user{idx}"] = recs
     return users
@@ -293,5 +352,9 @@ def load_records():
 
 def csv_paths():
     """Paths to the two per-user CSV files, for export/download."""
-    omblepy_dir = get_omblepy_dir()
-    return [omblepy_dir / "user1.csv", omblepy_dir / "user2.csv"]
+    return [_user_readings_path(1), _user_readings_path(2)]
+
+
+# Runs once per app startup (this module is only ever imported once): pulls
+# forward any readings from before READINGS_DIR existed.
+_migrate_legacy_readings()

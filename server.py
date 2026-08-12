@@ -124,6 +124,17 @@ def api_export(user_idx):
     return send_file(path, as_attachment=True, download_name=path.name)
 
 
+@app.route("/api/open-folder", methods=["POST"])
+def api_open_folder():
+    # "Open readings folder" button -- pops the OS's own file manager
+    # rather than us trying to build a file browser into the page.
+    try:
+        reader.open_readings_folder()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 def _already_running():
     """True if our own server is already listening on PORT. Used so that
     double-clicking the app icon a second time -- after you closed the
@@ -168,7 +179,7 @@ def main():
     try:
         print(f"Omron reader running locally at http://127.0.0.1:{PORT}")
         print("Nothing here talks to the internet or to Omron's servers.")
-        print(f"Your readings live in: {reader.DATA_DIR}")
+        print(f"Your readings live in: {reader.READINGS_DIR}")
         print("Closing the browser tab does NOT stop this app -- it keeps")
         print("running in the background so you can reopen it any time by")
         print("launching it again. Use the Quit button in the page, or")

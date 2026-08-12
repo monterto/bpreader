@@ -202,6 +202,7 @@
     </div>
     <div class="row" style="margin-top:14px;">
       <button class="secondary" onclick="exportCsv()">Download CSV for this user</button>
+      <button class="secondary" onclick="openFolder()">Open readings folder</button>
     </div>
   </div>
 
@@ -379,6 +380,17 @@ function drawSparkline(recs) {
 function exportCsv() {
   const idx = currentUser === 'user1' ? 1 : 2;
   window.location = `/api/export/${idx}`;
+}
+
+// Asks the server to pop the OS's file manager at the readings folder.
+async function openFolder() {
+  try {
+    const res = await fetch('/api/open-folder', {method: 'POST'});
+    const data = await res.json();
+    if (!data.ok) alert('Could not open the folder: ' + (data.error || 'unknown error'));
+  } catch (e) {
+    alert('Could not open the folder: ' + e.message);
+  }
 }
 
 // Actually stops the background app (see server.py's /api/shutdown).
