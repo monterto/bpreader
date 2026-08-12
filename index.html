@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Omron Reader — Local Only</title>
+<style>
+  /* Theme: neutral dark grey + slate blue accent. Change these variables
+     to re-theme the whole app -- nothing else references raw colors. */
+  :root {
+    --bg: #1a1a1c;
+    --panel: #222225;
+    --panel-border: #2e2e31;
+    --accent: #7c93c9;
+    --accent-dim: #4f6396;
+    --text: #e9e9ec;
+    --text-dim: #9a9a9e;
+    --danger: #e08585;
+    --sys-color: #7c93c9;
+    --dia-color: #5a7fae;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 28px;
+  }
+  .badge {
+    display: inline-block;
+    background: rgba(124,147,201,0.14);
+    border: 1px solid rgba(124,147,201,0.4);
+    color: var(--accent);
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  .panel h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 14px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    background: var(--accent-dim);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+  }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  input[type=text] {
+    background: #131314;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    flex: 1;
+    min-width: 200px;
+  }
+  #deviceList {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .device-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .device-item:hover { border-color: var(--accent-dim); }
+  .device-item .mac { color: var(--text-dim); font-family: monospace; }
+  .status {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin-top: 10px;
+    white-space: pre-wrap;
+    font-family: monospace;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .status.error { color: var(--danger); }
+
+  /* Readings table: new-value/old-value distinguish just-synced readings
+     from previously-stored ones; compact-row + toggle-row implement the
+     "only show the last 8, collapse the rest" behavior. */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--panel-border); }
+  th { color: var(--text-dim); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; }
+  .flag { font-size: 0.72rem; color: var(--danger); }
+  td.new-value { color: var(--accent); font-weight: 500; }
+  td.old-value { color: var(--text); }
+  tr.compact-row { display: none; }
+  tr.compact-row td { padding: 4px 10px; font-size: 0.78rem; color: var(--text-dim); }
+  tr.compact-row td.new-value { color: var(--accent); }
+  .toggle-row td { text-align: center; cursor: pointer; color: var(--text-dim); font-size: 0.78rem; padding: 8px; }
+  .toggle-row:hover td { color: var(--text); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 0.85rem; color: var(--text-dim); border: 1px solid transparent;
+  }
+  .tab.active { background: rgba(124,147,201,0.12); color: var(--accent); border-color: rgba(124,147,201,0.35); }
+  .empty { color: var(--text-dim); font-size: 0.88rem; padding: 20px 0; text-align: center; }
+  .footer-note { color: var(--text-dim); font-size: 0.78rem; margin-top: 30px; text-align: center; line-height: 1.6; }
+  .footer-note a { color: var(--accent); text-decoration: none; }
+  .footer-note a:hover { text-decoration: underline; }
+  .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; }
+  .quit-btn { flex-shrink: 0; white-space: nowrap; }
+  .sparkline-legend { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
+  .sparkline-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header-row">
+    <div>
+      <h1>Omron Blood Pressure Reader <span class="badge">local only</span></h1>
+      <div class="subtitle">Scan for your monitor, pair it once, then sync each time you take a reading.</div>
+    </div>
+    <button class="secondary quit-btn" onclick="quitApp()" title="Stops the background app. Closing this browser tab alone does not.">Quit app</button>
+  </div>
+
+  <div class="panel" id="setupPanel">
+    <h2>Device</h2>
+    <div class="row">
+      <input type="text" id="macInput" placeholder="MAC address (auto-fills after scan)" value="{{ saved_mac }}">
+      <button class="secondary" onclick="scan()">Scan for device</button>
+      <button onclick="pair()">Pair</button>
+    </div>
+    <div id="deviceList"></div>
+    <div class="status" id="setupStatus"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Sync</h2>
+    <div class="row">
+      <button onclick="sync(false)">Sync now</button>
+      <button class="secondary" onclick="sync(true)">Sync new readings only</button>
+    </div>
+    <div class="status" id="syncStatus"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Readings</h2>
+    <div class="tabs">
+      <div class="tab active" data-user="user1" onclick="switchUser('user1')">User 1</div>
+      <div class="tab" data-user="user2" onclick="switchUser('user2')">User 2</div>
+    </div>
+    <div id="chartContainer"></div>
+    <div class="sparkline-legend"><span class="dot" style="background:var(--sys-color);"></span>systolic&nbsp;&nbsp;<span class="dot" style="background:var(--dia-color);"></span>diastolic</div>
+    <div style="margin-top:18px; overflow-x:auto;">
+      <table id="recordsTable">
+        <thead>
+          <tr><th>Date / time</th><th>Systolic</th><th>Diastolic</th><th>Pulse</th><th>Flags</th></tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+      <div class="empty" id="emptyState">No readings yet — pair your monitor, then hit Sync.</div>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <button class="secondary" onclick="exportCsv()">Download CSV for this user</button>
+    </div>
+  </div>
+
+  <div class="footer-note">A small local tool for reading your Omron monitor without an account or cloud sync. It talks to the monitor directly over Bluetooth using <a href="https://github.com/userx14/omblepy" target="_blank" rel="noopener">omblepy</a>, and stores readings as plain CSV files on your machine.</div>
+</div>
+
+<script>
+let currentUser = 'user1';
+let allRecords = {user1: [], user2: []};
+// Datetimes returned by the most recent sync -- used to highlight just-
+// downloaded readings differently from ones that were already stored.
+let newDatetimes = {user1: new Set(), user2: new Set()};
+const VISIBLE_ROWS = 8;
+
+// Scans for nearby BLE devices and lists them for the user to pick from
+// (triggered by the "Scan for device" button).
+async function scan() {
+  const status = document.getElementById('setupStatus');
+  const list = document.getElementById('deviceList');
+  status.textContent = 'Scanning for nearby Bluetooth devices (6s)...';
+  status.className = 'status';
+  list.innerHTML = '';
+  try {
+    const res = await fetch('/api/scan');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    if (data.devices.length === 0) {
+      status.textContent = 'No BLE devices found. Make sure the monitor is on and, for first pairing, hold its Bluetooth button until "-P-" blinks.';
+      return;
+    }
+    status.textContent = `Found ${data.devices.length} device(s). Click yours below (likely the strongest signal / named entry).`;
+    data.devices.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'device-item';
+      el.innerHTML = `<span>${d.name}</span><span class="mac">${d.mac} · ${d.rssi} dBm</span>`;
+      el.onclick = () => { document.getElementById('macInput').value = d.mac; };
+      list.appendChild(el);
+    });
+  } catch (e) {
+    status.textContent = 'Scan failed: ' + e.message;
+    status.className = 'status error';
+  }
+}
+
+// One-time key exchange with the monitor. Only needs to succeed once per
+// monitor -- see /api/pair on the server side for what it actually does.
+async function pair() {
+  const mac = document.getElementById('macInput').value.trim();
+  const status = document.getElementById('setupStatus');
+  if (!mac) { status.textContent = 'Pick or enter a MAC address first.'; status.className = 'status error'; return; }
+  status.textContent = 'Pairing... on the monitor, hold the Bluetooth button until "-P-" blinks, then wait.';
+  status.className = 'status';
+  try {
+    const res = await fetch('/api/pair', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac})});
+    const data = await res.json();
+    status.textContent = (data.stdout || '') + (data.stderr || '');
+    status.className = data.ok ? 'status' : 'status error';
+    if (data.ok) status.textContent += '\n\nPaired. You can Sync now.';
+  } catch (e) {
+    status.textContent = 'Pairing failed: ' + e.message;
+    status.className = 'status error';
+  }
+}
+
+// Downloads readings from the monitor and re-renders the table/chart.
+// newOnly=true uses the monitor's own unread-record counter instead of
+// re-reading everything, which is faster for routine use.
+async function sync(newOnly) {
+  const mac = document.getElementById('macInput').value.trim();
+  const status = document.getElementById('syncStatus');
+  if (!mac) { status.textContent = 'Pair a device first.'; status.className = 'status error'; return; }
+  status.textContent = 'Syncing... this can take a bit.';
+  status.className = 'status';
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({mac, new_only: newOnly, time_sync: false})
+    });
+    const data = await res.json();
+    status.textContent = (data.stdout || '') + (data.stderr || '');
+    status.className = data.ok ? 'status' : 'status error';
+    if (data.ok && data.records) {
+      allRecords = data.records;
+      newDatetimes = {
+        user1: new Set((data.new_datetimes && data.new_datetimes.user1) || []),
+        user2: new Set((data.new_datetimes && data.new_datetimes.user2) || []),
+      };
+      renderUser();
+    }
+  } catch (e) {
+    status.textContent = 'Sync failed: ' + e.message;
+    status.className = 'status error';
+  }
+}
+
+function switchUser(u) {
+  currentUser = u;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.user === u));
+  renderUser();
+}
+
+// Renders the readings table for the current user: newest readings get
+// the accent color, everything past VISIBLE_ROWS collapses behind a
+// "Show N older readings" toggle so a long history doesn't dominate the page.
+function renderUser() {
+  const recs = allRecords[currentUser] || [];
+  const isNew = newDatetimes[currentUser] || new Set();
+  const body = document.getElementById('recordsBody');
+  const empty = document.getElementById('emptyState');
+  body.innerHTML = '';
+  empty.style.display = recs.length ? 'none' : 'block';
+
+  const rowHtml = (r) => {
+    const cls = isNew.has(r.datetime) ? 'new-value' : 'old-value';
+    const flags = [r.irregular_heartbeat ? 'irregular heartbeat' : null, r.movement ? 'movement' : null].filter(Boolean).join(', ');
+    return `<td class="${cls}">${r.datetime}</td><td class="${cls}">${r.systolic}</td><td class="${cls}">${r.diastolic}</td><td class="${cls}">${r.pulse}</td><td class="flag">${flags}</td>`;
+  };
+
+  recs.slice(0, VISIBLE_ROWS).forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = rowHtml(r);
+    body.appendChild(tr);
+  });
+
+  const older = recs.slice(VISIBLE_ROWS);
+  if (older.length) {
+    const toggle = document.createElement('tr');
+    toggle.className = 'toggle-row';
+    toggle.innerHTML = `<td colspan="5">Show ${older.length} older reading${older.length === 1 ? '' : 's'}</td>`;
+    let expanded = false;
+    toggle.onclick = () => {
+      expanded = !expanded;
+      toggle.querySelector('td').textContent = expanded
+        ? 'Hide older readings'
+        : `Show ${older.length} older reading${older.length === 1 ? '' : 's'}`;
+      body.querySelectorAll('tr.compact-row').forEach(row => { row.style.display = expanded ? 'table-row' : 'none'; });
+    };
+    body.appendChild(toggle);
+    older.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.className = 'compact-row';
+      tr.innerHTML = rowHtml(r);
+      body.appendChild(tr);
+    });
+  }
+
+  drawSparkline(recs);
+}
+
+// Compact, dependency-free trend line. No axes, no labels, no legend
+// beyond the two dots below it -- just enough to see the shape of things.
+function drawSparkline(recs) {
+  const container = document.getElementById('chartContainer');
+  const sorted = [...recs].sort((a, b) => a.datetime.localeCompare(b.datetime));
+  if (sorted.length < 2) {
+    container.innerHTML = '<div class="empty" style="padding:10px 0;">Not enough readings yet for a trend line.</div>';
+    return;
+  }
+  const sys = sorted.map(r => r.systolic);
+  const dia = sorted.map(r => r.diastolic);
+  const all = sys.concat(dia);
+  const min = Math.min(...all) - 5;
+  const max = Math.max(...all) + 5;
+  const w = 600, h = 56;
+  const toPoints = (vals) => vals.map((v, i) =>
+    `${(i / (vals.length - 1)) * w},${h - ((v - min) / (max - min)) * h}`
+  ).join(' ');
+  container.innerHTML = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${toPoints(dia)}" fill="none" stroke="#5a7fae" stroke-width="2" />
+    <polyline points="${toPoints(sys)}" fill="none" stroke="#7c93c9" stroke-width="2" />
+  </svg>`;
+}
+
+// Triggers a direct download of the raw CSV for the current user.
+function exportCsv() {
+  const idx = currentUser === 'user1' ? 1 : 2;
+  window.location = `/api/export/${idx}`;
+}
+
+// Actually stops the background app (see server.py's /api/shutdown).
+// Closing this tab alone does NOT do this -- the server keeps running
+// so you can reopen the page without re-launching the app.
+async function quitApp() {
+  if (!confirm('Stop the BP Reader app? You can start it again any time from its icon.')) return;
+  try {
+    await fetch('/api/shutdown', {method: 'POST'});
+  } catch (e) {
+    // The request itself failing is expected -- the server exits right
+    // after responding, so the connection often just drops.
+  }
+  document.body.innerHTML = '<div style="padding:60px 20px; text-align:center; color:#9a9a9e; font-family:sans-serif;">' +
+    'BP Reader has stopped. You can close this tab.</div>';
+}
+
+// load any existing data on page load
+(async function init() {
+  try {
+    const res = await fetch('/api/records');
+    const data = await res.json();
+    if (data.ok) { allRecords = data.records; renderUser(); }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
