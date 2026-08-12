@@ -119,11 +119,10 @@ want.
 
 | OS | Location |
 |---|---|
-| Linux | `~/.local/share/bp-reader/omblepy/user1.csv` (+ `user2.csv`) |
-| Windows | `%LOCALAPPDATA%\BPReader\omblepy\user1.csv` |
+| Linux | `~/.local/share/bp-reader/readings/user1/user1.csv` (+ `user2.csv`) |
+| Windows | `%LOCALAPPDATA%\BPReader\readings\user1\user1.csv` |
 
-Plain CSV, one row per reading (`datetime,dia,sys,bpm,mov,ihb`). No
-database, no proprietary format.
+Plain CSV, one row per reading (`datetime,dia,sys,bpm,mov,ihb`).
 
 ## Troubleshooting
 
