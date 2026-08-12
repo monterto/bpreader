@@ -1,20 +1,21 @@
 # BP Reader
 
+## Disclaimer
+
+This personal project was created using AI tools.
+It is not affiliated with or endorsed by Omron. Not a medical
+device, not validated for clinical use — it downloads numbers your monitor
+already measured, it doesn't measure anything itself. Use at your own
+judgment.
+
+## Description
+
 A small local app for downloading readings off an Omron BP7455CAN (and
-similar "10 Series" / HEM-7342T) blood pressure monitor over Bluetooth —
-without an Omron account, without their app, and without anything leaving
-your computer.
-
-It shows up as a page in your browser, but it's not a website — it's a
-local program that happens to use a browser tab as its window. Nothing here
-makes a network request. There's no server to talk to, no account to
-create, and no telemetry.
-
-## Why this exists
+similar "10 Series" / HEM-7342T) blood pressure monitor over Bluetooth.
+Intended to avoid uploading personal health information to Omron's servers.
 
 Omron's own app works fine, but it requires an account and syncs your
-readings to their cloud to use it at all — even if all you want is the
-numbers off the device in front of you. This app talks to the monitor
+readings to their cloud to use it at all. This app talks to the monitor
 directly and writes readings straight to a CSV file on your machine.
 
 ## How it works
@@ -24,8 +25,7 @@ by Omron, but it's been reverse-engineered by the community in
 [`omblepy`](https://github.com/userx14/omblepy). This app doesn't
 re-implement that protocol — it drives `omblepy` directly (in-process, not
 as a subprocess) and wraps it in a small Flask server with a browser-based
-UI: scan for the device, pair once, sync readings, see them in a table and
-a simple trend line, export to CSV.
+UI.
 
 ```
 Browser UI  --->  Flask server  --->  omblepy  --->  Monitor
@@ -189,14 +189,5 @@ build_windows.bat      Builds a Windows .exe via PyInstaller
 ## A note on licensing
 
 This project depends on and bundles [`omblepy`](https://github.com/userx14/omblepy)
-to talk to the monitor. At time of writing, that upstream project doesn't
-carry an explicit license file — worth checking its current state and
-making sure your intended use (and this repo's own license, if you add
-one) is compatible before you redistribute this widely.
-
-## Disclaimer
-
-Personal project, not affiliated with or endorsed by Omron. Not a medical
-device, not validated for clinical use — it downloads numbers your monitor
-already measured, it doesn't measure anything itself. Use at your own
-judgment.
+to talk to the monitor. At time of writing, this upstream project doesn't
+carry an explicit license file.
