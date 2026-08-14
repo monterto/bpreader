@@ -204,6 +204,10 @@
       <button class="secondary" onclick="exportCsv()">Download CSV for this user</button>
       <button class="secondary" onclick="openFolder()">Open readings folder</button>
     </div>
+    <label class="check" style="margin-top:8px; display:block;">
+      <input type="checkbox" id="averageExportCheck">
+      Average readings taken within 6 minutes of each other (export only -- your stored data is never changed)
+    </label>
   </div>
 
   <div class="footer-note">A small local tool for reading your Omron monitor without an account or cloud sync. It talks to the monitor directly over Bluetooth using <a href="https://github.com/userx14/omblepy" target="_blank" rel="noopener">omblepy</a>, and stores readings as plain CSV files on your machine.</div>
@@ -376,10 +380,14 @@ function drawSparkline(recs) {
   </svg>`;
 }
 
-// Triggers a direct download of the raw CSV for the current user.
+// Triggers a direct download of the CSV for the current user. The
+// "average" toggle asks the server to compute averaged sessions on the
+// fly for this download only -- nothing about how readings are stored
+// changes either way.
 function exportCsv() {
   const idx = currentUser === 'user1' ? 1 : 2;
-  window.location = `/api/export/${idx}`;
+  const averaged = document.getElementById('averageExportCheck').checked;
+  window.location = `/api/export/${idx}${averaged ? '?averaged=true' : ''}`;
 }
 
 // Asks the server to pop the OS's file manager at the readings folder.

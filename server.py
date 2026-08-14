@@ -6,12 +6,14 @@ Everything stays on this machine: no accounts, no cloud sync, no telemetry.
 Run this, open http://127.0.0.1:5757 in your browser.
 """
 import asyncio
+import csv
+import io
 import os
 import threading
 import urllib.request
 import webbrowser
 
-from flask import Flask, jsonify, request, send_file, render_template
+from flask import Flask, jsonify, request, send_file, render_template, Response
 
 import omron_reader as reader
 
@@ -114,10 +116,33 @@ def api_records():
 
 @app.route("/api/export/<int:user_idx>")
 def api_export(user_idx):
-    # Serves the raw CSV file straight from disk for the "Download" button.
-    paths = reader.csv_paths()
+    # Serves readings as a CSV download. ?averaged=true computes averaged
+    # sessions on the fly (see build_averaged_export) and streams that
+    # straight from memory -- the raw per-user CSV on disk is never
+    # touched either way.
     if user_idx not in (1, 2):
         return "Invalid user", 400
+
+    if request.args.get("averaged") == "true":
+        records = reader.load_records().get(f"user{user_idx}", [])
+        if not records:
+            return "No data synced yet", 404
+        rows = reader.build_averaged_export(records)
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=["datetime", "dia", "sys", "bpm", "mov", "ihb", "readings_averaged"])
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({
+                "datetime": r["datetime"], "dia": r["diastolic"], "sys": r["systolic"],
+                "bpm": r["pulse"], "mov": 1 if r["movement"] else 0,
+                "ihb": 1 if r["irregular_heartbeat"] else 0,
+                "readings_averaged": r["readings_averaged"],
+            })
+        return Response(buf.getvalue(), mimetype="text/csv", headers={
+            "Content-Disposition": f"attachment; filename=user{user_idx}_averaged.csv"
+        })
+
+    paths = reader.csv_paths()
     path = paths[user_idx - 1]
     if not path.exists():
         return "No data synced yet", 404

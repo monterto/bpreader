@@ -355,6 +355,58 @@ def csv_paths():
     return [_user_readings_path(1), _user_readings_path(2)]
 
 
+def build_averaged_export(records, window_minutes=6):
+    """Group readings taken close together in time -- a typical
+    multiple-reading "session", per common BP guidance to take a couple of
+    readings a minute or two apart and average them -- into a single row
+    each. Purely a computed view: reads already-loaded records and returns
+    new dicts, never touches the underlying CSV files. Callers are
+    responsible for keeping this out of anything that gets written back to
+    disk, so the raw per-reading history is never lost.
+
+    Grouping is chain-based, not window-from-start: a reading joins the
+    current group if it's within `window_minutes` of the *previous*
+    reading in that group. That way a session of readings taken ~1-2
+    minutes apart stays together even if the session as a whole runs
+    longer than window_minutes, while a single large gap still correctly
+    starts a new session.
+    """
+    if not records:
+        return []
+
+    from datetime import datetime as _dt, timedelta as _td
+    fmt = "%Y-%m-%d %H:%M:%S"
+    window = _td(minutes=window_minutes)
+
+    chronological = sorted(records, key=lambda r: r["datetime"])
+    groups = [[chronological[0]]]
+    for rec in chronological[1:]:
+        prev_time = _dt.strptime(groups[-1][-1]["datetime"], fmt)
+        this_time = _dt.strptime(rec["datetime"], fmt)
+        if this_time - prev_time <= window:
+            groups[-1].append(rec)
+        else:
+            groups.append([rec])
+
+    averaged = []
+    for group in groups:
+        n = len(group)
+        averaged.append({
+            "datetime": group[0]["datetime"],  # session start
+            "systolic": round(sum(r["systolic"] for r in group) / n),
+            "diastolic": round(sum(r["diastolic"] for r in group) / n),
+            "pulse": round(sum(r["pulse"] for r in group) / n),
+            # A flag on any reading in the session is worth carrying
+            # forward -- better to over-flag a possible quality issue than
+            # let it get averaged away and disappear.
+            "movement": any(r["movement"] for r in group),
+            "irregular_heartbeat": any(r["irregular_heartbeat"] for r in group),
+            "readings_averaged": n,
+        })
+    averaged.sort(key=lambda r: r["datetime"], reverse=True)
+    return averaged
+
+
 # Runs once per app startup (this module is only ever imported once): pulls
 # forward any readings from before READINGS_DIR existed.
 _migrate_legacy_readings()
