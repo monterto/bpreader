@@ -21,9 +21,45 @@ app = Flask(__name__, template_folder=str(reader.resource_path("templates")))
 
 PORT = 5757
 
+# Only these Host headers are accepted. A page on any other website can
+# point its own domain at 127.0.0.1 ("DNS rebinding") and then read
+# /api/records -- i.e. your blood-pressure history -- from this server.
+# Checking Host stops that, since the browser still sends the attacker's
+# hostname.
+_ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+_ALLOWED_ORIGINS = {f"http://{h}" for h in _ALLOWED_HOSTS}
+
+# omblepy is driven by swapping the process-wide sys.argv and cwd (see
+# omron_reader._run_omblepy), and the monitor only talks to one client at a
+# time anyway. Flask serves requests on multiple threads, so a double-click
+# on Sync, or Scan during a Sync, could interleave and corrupt both runs.
+_ble_lock = threading.Lock()
+
+
+@app.before_request
+def _local_only_guard():
+    if request.host not in _ALLOWED_HOSTS:
+        return "Forbidden host", 403
+    # Block cross-site form posts (e.g. a random web page silently hitting
+    # /api/shutdown). Same-origin fetch() from our own page sends a matching
+    # Origin; requests with no Origin at all (curl, etc.) are allowed.
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        if origin is not None and origin not in _ALLOWED_ORIGINS:
+            return "Forbidden origin", 403
+    return None
+
 
 def run_async(coro):
     return asyncio.run(coro)
+
+
+def _json_body():
+    return request.get_json(silent=True) or {}
+
+
+def _busy():
+    return jsonify({"ok": False, "error": "Another Bluetooth operation is already running. Wait for it to finish."}), 409
 
 
 @app.route("/")
@@ -55,39 +91,45 @@ def api_shutdown():
 @app.route("/api/scan")
 def api_scan():
     # Live BLE scan, triggered from the page's "Scan for device" button.
+    if not _ble_lock.acquire(blocking=False):
+        return _busy()
     try:
         devices = run_async(reader.scan_devices())
         return jsonify({"ok": True, "devices": devices})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        _ble_lock.release()
 
 
 @app.route("/api/pair", methods=["POST"])
 def api_pair():
     # One-time step: writes our own pairing key to the monitor. Only
     # needed again if you re-pair with a different app (e.g. Omron Connect).
-    mac = request.json.get("mac", "").strip()
+    mac = str(_json_body().get("mac", "")).strip()
     if not mac:
         return jsonify({"ok": False, "error": "No MAC address provided"}), 400
+    if not _ble_lock.acquire(blocking=False):
+        return _busy()
     try:
-        result = reader.pair_device(mac)
-        if result["ok"]:
-            cfg = reader.load_config()
-            cfg["mac"] = mac
-            reader.save_config(cfg)
-        return jsonify(result)
+        # pair_device() saves the MAC to config itself on success.
+        return jsonify(reader.pair_device(mac))
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        _ble_lock.release()
 
 
 @app.route("/api/sync", methods=["POST"])
 def api_sync():
-    data = request.json or {}
-    mac = data.get("mac", "").strip()
+    data = _json_body()
+    mac = str(data.get("mac", "")).strip()
     new_only = bool(data.get("new_only", False))
     time_sync = bool(data.get("time_sync", False))
     if not mac:
         return jsonify({"ok": False, "error": "No MAC address provided"}), 400
+    if not _ble_lock.acquire(blocking=False):
+        return _busy()
     try:
         # Snapshot what's on disk *before* syncing, so we can tell the
         # difference between "just downloaded" and "already had this" --
@@ -103,6 +145,8 @@ def api_sync():
         return jsonify({**result, "records": records, "new_datetimes": new_datetimes})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        _ble_lock.release()
 
 
 @app.route("/api/records")

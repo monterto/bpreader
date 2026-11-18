@@ -167,8 +167,8 @@
     <h2>Device</h2>
     <div class="row">
       <input type="text" id="macInput" placeholder="MAC address (auto-fills after scan)" value="{{ saved_mac }}">
-      <button class="secondary" onclick="scan()">Scan for device</button>
-      <button onclick="pair()">Pair</button>
+      <button class="secondary" data-ble onclick="scan()">Scan for device</button>
+      <button data-ble onclick="pair()">Pair</button>
     </div>
     <div id="deviceList"></div>
     <div class="status" id="setupStatus"></div>
@@ -177,8 +177,8 @@
   <div class="panel">
     <h2>Sync</h2>
     <div class="row">
-      <button onclick="sync(false)">Sync now</button>
-      <button class="secondary" onclick="sync(true)">Sync new readings only</button>
+      <button data-ble onclick="sync(false)">Sync now</button>
+      <button class="secondary" data-ble onclick="sync(true)">Sync new readings only</button>
     </div>
     <div class="status" id="syncStatus"></div>
   </div>
@@ -221,6 +221,13 @@ let allRecords = {user1: [], user2: []};
 let newDatetimes = {user1: new Set(), user2: new Set()};
 const VISIBLE_ROWS = 8;
 
+// Only one Bluetooth operation can run at a time (the server enforces this
+// too). Disabling the buttons stops accidental double-clicks from queuing a
+// second scan/pair/sync while the first is still talking to the monitor.
+function setBleBusy(busy) {
+  document.querySelectorAll('[data-ble]').forEach(b => { b.disabled = busy; });
+}
+
 // Scans for nearby BLE devices and lists them for the user to pick from
 // (triggered by the "Scan for device" button).
 async function scan() {
@@ -229,6 +236,7 @@ async function scan() {
   status.textContent = 'Scanning for nearby Bluetooth devices (6s)...';
   status.className = 'status';
   list.innerHTML = '';
+  setBleBusy(true);
   try {
     const res = await fetch('/api/scan');
     const data = await res.json();
@@ -241,13 +249,23 @@ async function scan() {
     data.devices.forEach(d => {
       const el = document.createElement('div');
       el.className = 'device-item';
-      el.innerHTML = `<span>${d.name}</span><span class="mac">${d.mac} · ${d.rssi} dBm</span>`;
+      // textContent, not innerHTML: device names come from any Bluetooth
+      // device in radio range, so a crafted name could otherwise inject
+      // script into this page (which can read your readings).
+      const nameEl = document.createElement('span');
+      nameEl.textContent = d.name;
+      const macEl = document.createElement('span');
+      macEl.className = 'mac';
+      macEl.textContent = `${d.mac} · ${d.rssi} dBm`;
+      el.append(nameEl, macEl);
       el.onclick = () => { document.getElementById('macInput').value = d.mac; };
       list.appendChild(el);
     });
   } catch (e) {
     status.textContent = 'Scan failed: ' + e.message;
     status.className = 'status error';
+  } finally {
+    setBleBusy(false);
   }
 }
 
@@ -259,15 +277,18 @@ async function pair() {
   if (!mac) { status.textContent = 'Pick or enter a MAC address first.'; status.className = 'status error'; return; }
   status.textContent = 'Pairing... on the monitor, hold the Bluetooth button until "-P-" blinks, then wait.';
   status.className = 'status';
+  setBleBusy(true);
   try {
     const res = await fetch('/api/pair', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac})});
     const data = await res.json();
-    status.textContent = (data.stdout || '') + (data.stderr || '');
+    status.textContent = (data.stdout || '') + (data.stderr || '') + (data.error || '');
     status.className = data.ok ? 'status' : 'status error';
     if (data.ok) status.textContent += '\n\nPaired. You can Sync now.';
   } catch (e) {
     status.textContent = 'Pairing failed: ' + e.message;
     status.className = 'status error';
+  } finally {
+    setBleBusy(false);
   }
 }
 
@@ -280,13 +301,14 @@ async function sync(newOnly) {
   if (!mac) { status.textContent = 'Pair a device first.'; status.className = 'status error'; return; }
   status.textContent = 'Syncing... this can take a bit.';
   status.className = 'status';
+  setBleBusy(true);
   try {
     const res = await fetch('/api/sync', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({mac, new_only: newOnly, time_sync: false})
     });
     const data = await res.json();
-    status.textContent = (data.stdout || '') + (data.stderr || '');
+    status.textContent = (data.stdout || '') + (data.stderr || '') + (data.error || '');
     status.className = data.ok ? 'status' : 'status error';
     if (data.ok && data.records) {
       allRecords = data.records;
@@ -299,6 +321,8 @@ async function sync(newOnly) {
   } catch (e) {
     status.textContent = 'Sync failed: ' + e.message;
     status.className = 'status error';
+  } finally {
+    setBleBusy(false);
   }
 }
 
