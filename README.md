@@ -8,6 +8,10 @@ device, not validated for clinical use — it downloads numbers your monitor
 already measured, it doesn't measure anything itself. Use at your own
 judgment.
 
+It's built for personal use and **tested on one setup only: Bazzite
+(Fedora 45) with an Omron BP7455CAN.** Anything else may work, but hasn't
+been tried, and there's no support.
+
 ## Description
 
 A small local app for downloading readings off an Omron BP7455CAN (and
@@ -16,7 +20,14 @@ Intended to avoid uploading personal health information to Omron's servers.
 
 Omron's own app works fine, but it requires an account and syncs your
 readings to their cloud to use it at all. This app talks to the monitor
-directly and writes readings straight to a CSV file on your machine.
+directly and writes readings straight to CSV files on your machine.
+
+- One-button sync, with the monitor's own steps on screen
+- Readings table and trend line per person, with new readings highlighted
+- CSV export, optionally averaging readings taken minutes apart
+- Several monitors and people: a borrowed monitor's readings can go to
+  their own person instead of mixing with yours
+- Opens in its own window and stops when you close it
 
 ## How it works
 
@@ -24,8 +35,8 @@ The Bluetooth protocol these monitors use is proprietary and undocumented
 by Omron, but it's been reverse-engineered by the community in
 [`omblepy`](https://github.com/userx14/omblepy). This app doesn't
 re-implement that protocol — it drives `omblepy` directly (in-process, not
-as a subprocess) and wraps it in a small Flask server with a browser-based
-UI.
+as a subprocess) and wraps it in a small Flask server, shown in an
+app-style browser window.
 
 ```
 Browser UI  --->  Flask server  --->  omblepy  --->  Monitor
@@ -112,8 +123,9 @@ finished AppImage over to your Linux machine.
 ### GitHub Actions (forks)
 
 `.github/workflows/build-appimage.yml` builds the AppImage on Fedora 45 and
-publishes a release when you push a `v*` tag, or when you run it from the
-Actions tab. Change the Fedora image to match the system you run it on.
+publishes a release when you push a version tag (like `2.0.1`), or when
+you run it from the Actions tab. Change the Fedora image to match the
+system you run it on.
 
 ### Linux — plain install, no AppImage *(untested)*
 
@@ -249,8 +261,9 @@ unlike matching on the `.AppImage` filename) then relaunch.
   `omblepy`, called in-process rather than reimplemented, specifically to
   avoid the risk of a subtly wrong reverse-engineered command corrupting
   the monitor's calibration data.
-- **No auto-update, no phone-home, no analytics.** The manifest/build
-  scripts declare no network capability beyond the Bluetooth stack itself.
+- **No phone-home, no analytics.** The app itself never connects to the
+  internet; it only listens on 127.0.0.1. Updates arrive only through an
+  AppImage manager like Gear Lever, if you set one up.
 
 ## Project layout
 

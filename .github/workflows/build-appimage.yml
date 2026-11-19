@@ -1,8 +1,8 @@
 # Builds BPReader-x86_64.AppImage and publishes it as a GitHub Release, so
 # AppImage managers like Gear Lever can update straight from this repo.
 #
-# Runs when a version tag is pushed:
-#     git tag v2.1.0 && git push origin v2.1.0
+# Runs when a version tag is pushed (this repo's tags look like 2.0.0):
+#     git tag 2.1.0 && git push origin 2.1.0
 # or by hand: Actions tab -> "Build AppImage" -> Run workflow, enter a version.
 #
 # It builds inside Fedora because the AppImage bundles the build system's own
@@ -12,11 +12,11 @@ name: Build AppImage
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["[0-9]*", "v[0-9]*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, e.g. v2.1.0"
+        description: "Release version, e.g. 2.1.0"
         required: true
 
 permissions:
