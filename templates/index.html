@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Omron Reader — Local Only</title>
+<title>BP Reader</title>
+<!-- Also the app window's icon when it opens as an app-style window. -->
+<link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+<link rel="icon" type="image/png" sizes="256x256" href="/static/icon.png">
 <style>
   /* Theme: neutral dark grey + slate blue accent. Change these variables
      to re-theme the whole app -- nothing else references raw colors. */
@@ -11,448 +14,686 @@
     --bg: #1a1a1c;
     --panel: #222225;
     --panel-border: #2e2e31;
+    --field: #131314;
     --accent: #7c93c9;
     --accent-dim: #4f6396;
+    --accent-soft: rgba(124,147,201,0.13);
     --text: #e9e9ec;
     --text-dim: #9a9a9e;
+    --ok: #7fbf8a;
+    --ok-soft: rgba(127,191,138,0.13);
     --danger: #e08585;
     --sys-color: #7c93c9;
     --dia-color: #5a7fae;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
+    margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
-    padding: 32px 20px 80px;
+    padding: 20px 20px 60px; line-height: 1.45;
   }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  h1 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    margin-bottom: 4px;
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .brand { font-size: 1.15rem; font-weight: 600; margin-right: auto; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 0.82rem;
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--panel-border);
+    background: var(--panel); color: var(--text-dim); cursor: pointer;
   }
-  .subtitle {
-    color: var(--text-dim);
-    font-size: 0.9rem;
-    margin-bottom: 28px;
-  }
-  .badge {
-    display: inline-block;
-    background: rgba(124,147,201,0.14);
-    border: 1px solid rgba(124,147,201,0.4);
-    color: var(--accent);
-    font-size: 0.72rem;
-    padding: 2px 8px;
-    border-radius: 999px;
-    letter-spacing: 0.02em;
-    margin-left: 8px;
-    vertical-align: middle;
-  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
+  .chip.ok { color: var(--ok); border-color: rgba(127,191,138,0.35); background: var(--ok-soft); }
+  .chip.ok .dot { background: var(--ok); }
   .panel {
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 12px;
-    padding: 20px 22px;
-    margin-bottom: 18px;
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
   }
-  .panel h2 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin: 0 0 14px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
+  h2 { font-size: 1.02rem; font-weight: 600; margin: 0 0 10px; }
+  h3 { font-size: 0.92rem; font-weight: 600; margin: 18px 0 8px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--text-dim); font-size: 0.84rem; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   button {
-    background: var(--accent-dim);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    font-weight: 500;
+    background: transparent; color: var(--text); border: 1px solid var(--panel-border);
+    border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; cursor: pointer; font-family: inherit;
   }
-  button.secondary {
-    background: transparent;
-    border: 1px solid var(--panel-border);
-    color: var(--text);
-  }
-  button:hover { filter: brightness(1.12); }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; padding: 10px 26px; font-size: 0.95rem; font-weight: 500; }
+  button.primary:hover { filter: brightness(1.12); }
+  button.link { border: none; padding: 2px 4px; color: var(--accent); font-size: 0.82rem; }
+  button.danger { color: var(--danger); }
   button:disabled { opacity: 0.5; cursor: default; }
-  input[type=text] {
-    background: #131314;
-    border: 1px solid var(--panel-border);
-    color: var(--text);
-    padding: 9px 12px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    flex: 1;
-    min-width: 200px;
+  input[type=text], select {
+    background: var(--field); border: 1px solid var(--panel-border); color: var(--text);
+    padding: 7px 10px; border-radius: 8px; font-size: 0.88rem; font-family: inherit;
   }
-  #deviceList {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 220px;
-    overflow-y: auto;
+  .steps { margin: 4px 0 14px; padding: 0; list-style: none; counter-reset: s; }
+  .steps li { counter-increment: s; display: flex; gap: 10px; margin: 7px 0; font-size: 0.92rem; }
+  .steps li::before {
+    content: counter(s); flex: none; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent); font-size: 0.78rem;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
   }
-  .device-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 10px;
-    border: 1px solid var(--panel-border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  .device-item:hover { border-color: var(--accent-dim); }
-  .device-item .mac { color: var(--text-dim); font-family: monospace; }
-  .status {
-    font-size: 0.82rem;
-    color: var(--text-dim);
-    margin-top: 10px;
-    white-space: pre-wrap;
-    font-family: monospace;
-    max-height: 140px;
-    overflow-y: auto;
-  }
+  .status { font-size: 0.9rem; margin-top: 12px; min-height: 1.3em; }
   .status.error { color: var(--danger); }
-
-  /* Readings table: new-value/old-value distinguish just-synced readings
-     from previously-stored ones; compact-row + toggle-row implement the
-     "only show the last 8, collapse the rest" behavior. */
+  .status.good { color: var(--ok); }
+  details { margin-top: 8px; font-size: 0.8rem; color: var(--text-dim); }
+  details summary { cursor: pointer; }
+  details pre {
+    white-space: pre-wrap; font-size: 0.76rem; background: var(--field); padding: 10px;
+    border-radius: 8px; max-height: 180px; overflow-y: auto; margin: 6px 0 0;
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel-head h2 { margin: 0 auto 0 0; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab { padding: 5px 12px; border-radius: 8px; cursor: pointer; font-size: 0.84rem; color: var(--text-dim); border: 1px solid transparent; background: none; }
+  .tab.active { background: var(--accent-soft); color: var(--accent); border-color: rgba(124,147,201,0.35); }
   table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--panel-border); }
-  th { color: var(--text-dim); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--panel-border); }
+  th { color: var(--text-dim); font-weight: 500; font-size: 0.76rem; }
   .flag { font-size: 0.72rem; color: var(--danger); }
+  .new-badge { font-size: 0.7rem; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; }
   td.new-value { color: var(--accent); font-weight: 500; }
-  td.old-value { color: var(--text); }
   tr.compact-row { display: none; }
   tr.compact-row td { padding: 4px 10px; font-size: 0.78rem; color: var(--text-dim); }
-  tr.compact-row td.new-value { color: var(--accent); }
   .toggle-row td { text-align: center; cursor: pointer; color: var(--text-dim); font-size: 0.78rem; padding: 8px; }
   .toggle-row:hover td { color: var(--text); }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-  .tab {
-    padding: 7px 14px; border-radius: 8px; cursor: pointer;
-    font-size: 0.85rem; color: var(--text-dim); border: 1px solid transparent;
-  }
-  .tab.active { background: rgba(124,147,201,0.12); color: var(--accent); border-color: rgba(124,147,201,0.35); }
-  .empty { color: var(--text-dim); font-size: 0.88rem; padding: 20px 0; text-align: center; }
-  .footer-note { color: var(--text-dim); font-size: 0.78rem; margin-top: 30px; text-align: center; line-height: 1.6; }
+  .empty { color: var(--text-dim); font-size: 0.88rem; padding: 18px 0; text-align: center; }
+  .legend { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  label.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.82rem; color: var(--text-dim); margin-top: 10px; }
+  .footer-note { color: var(--text-dim); font-size: 0.76rem; margin-top: 24px; text-align: center; line-height: 1.6; }
   .footer-note a { color: var(--accent); text-decoration: none; }
-  .footer-note a:hover { text-decoration: underline; }
-  .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; }
-  .quit-btn { flex-shrink: 0; white-space: nowrap; }
-  .sparkline-legend { font-size: 0.72rem; color: var(--text-dim); margin-top: 4px; }
-  .sparkline-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  /* Devices screen: a sheet over the page. */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; justify-content: center; align-items: flex-start; padding: 24px 16px; overflow-y: auto; z-index: 10; }
+  .sheet { background: var(--bg); border: 1px solid var(--panel-border); border-radius: 14px; width: 100%; max-width: 640px; padding: 18px 20px; }
+  .sheet-head { display: flex; align-items: center; margin-bottom: 12px; }
+  .sheet-head h2 { margin: 0 auto 0 0; }
+  .device-card { border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: var(--panel); }
+  .device-card .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .device-card .name { font-weight: 600; }
+  .badge { font-size: 0.72rem; padding: 2px 9px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+  .slot-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.84rem; color: var(--text-dim); }
+  .slot-row span { min-width: 110px; }
+  .wizard { border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+  .wizard .steps li { align-items: flex-start; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; font-size: 0.8rem; color: var(--text-dim); }
+  #scanList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+  .scan-item { display: flex; justify-content: space-between; text-align: left; font-size: 0.84rem; }
+  .scan-item .mac { color: var(--text-dim); font-family: monospace; }
+  .scan-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .sheet-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--panel-border); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="header-row">
-    <div>
-      <h1>Omron Blood Pressure Reader <span class="badge">local only</span></h1>
-      <div class="subtitle">Scan for your monitor, pair it once, then sync each time you take a reading.</div>
-    </div>
-    <button class="secondary quit-btn" onclick="quitApp()" title="Stops the background app. Closing this browser tab alone does not.">Quit app</button>
-  </div>
+<div class="wrap" id="app">
+  <header class="topbar">
+    <div class="brand">BP Reader</div>
+    <button class="chip" id="deviceChip" onclick="openDevices()" title="Devices and settings"><span class="dot"></span><span id="deviceChipText">No monitor set up</span></button>
+    <button onclick="openDevices()" aria-label="Devices and settings" title="Devices and settings">⚙</button>
+  </header>
 
-  <div class="panel" id="setupPanel">
-    <h2>Device</h2>
-    <div class="row">
-      <input type="text" id="macInput" placeholder="MAC address (auto-fills after scan)" value="{{ saved_mac }}">
-      <button class="secondary" data-ble onclick="scan()">Scan for device</button>
-      <button data-ble onclick="pair()">Pair</button>
-    </div>
-    <div id="deviceList"></div>
-    <div class="status" id="setupStatus"></div>
-  </div>
+  <section class="panel" id="setupCard" hidden>
+    <h2>Set up your monitor</h2>
+    <p class="muted">Pair your monitor with this computer once. After that, syncing is one button.</p>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="openDevices(true)">Set up a monitor</button></div>
+  </section>
 
-  <div class="panel">
-    <h2>Sync</h2>
+  <section class="panel" id="syncCard" hidden>
+    <h2>Sync readings</h2>
+    <ol class="steps">
+      <li><span>With the monitor off, press the <b>Connection</b> button on its back once. Don't hold it.</span></li>
+      <li><span>When the transfer symbol flashes, press Sync. If you see a flashing <b>P</b> instead, that's pairing mode: press START/STOP and try again.</span></li>
+    </ol>
     <div class="row">
-      <button data-ble onclick="sync(false)">Sync now</button>
-      <button class="secondary" data-ble onclick="sync(true)">Sync new readings only</button>
+      <button class="primary" id="syncBtn" data-ble onclick="sync()">Sync</button>
+      <span class="muted" id="lastSync"></span>
     </div>
     <div class="status" id="syncStatus"></div>
-  </div>
+    <details id="syncDetails" hidden><summary>Details</summary><pre id="syncLog"></pre></details>
+  </section>
 
-  <div class="panel">
-    <h2>Readings</h2>
-    <div class="tabs">
-      <div class="tab active" data-user="user1" onclick="switchUser('user1')">User 1</div>
-      <div class="tab" data-user="user2" onclick="switchUser('user2')">User 2</div>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Readings</h2>
+      <div class="tabs" id="peopleTabs"></div>
+      <button class="link" onclick="renamePerson()" title="Rename this person">Rename</button>
     </div>
     <div id="chartContainer"></div>
-    <div class="sparkline-legend"><span class="dot" style="background:var(--sys-color);"></span>systolic&nbsp;&nbsp;<span class="dot" style="background:var(--dia-color);"></span>diastolic</div>
-    <div style="margin-top:18px; overflow-x:auto;">
-      <table id="recordsTable">
-        <thead>
-          <tr><th>Date / time</th><th>Systolic</th><th>Diastolic</th><th>Pulse</th><th>Flags</th></tr>
-        </thead>
+    <div class="legend"><span class="dot" style="background:var(--sys-color);"></span>systolic&nbsp;&nbsp;<span class="dot" style="background:var(--dia-color);"></span>diastolic</div>
+    <div style="margin-top:14px; overflow-x:auto;">
+      <table>
+        <thead><tr><th>Date / time</th><th>Systolic</th><th>Diastolic</th><th>Pulse</th><th>Flags</th></tr></thead>
         <tbody id="recordsBody"></tbody>
       </table>
-      <div class="empty" id="emptyState">No readings yet — pair your monitor, then hit Sync.</div>
+      <div class="empty" id="emptyState">No readings yet.</div>
     </div>
     <div class="row" style="margin-top:14px;">
-      <button class="secondary" onclick="exportCsv()">Download CSV for this user</button>
-      <button class="secondary" onclick="openFolder()">Open readings folder</button>
+      <button onclick="exportCsv()">Export CSV</button>
+      <button onclick="openFolder()">Open readings folder</button>
     </div>
-    <label class="check" style="margin-top:8px; display:block;">
-      <input type="checkbox" id="averageExportCheck">
-      Average readings taken within 6 minutes of each other (export only -- your stored data is never changed)
-    </label>
-  </div>
+    <label class="check"><input type="checkbox" id="averageExportCheck"> Average readings taken within 6 minutes of each other (export only; your stored readings never change)</label>
+  </section>
 
-  <div class="footer-note">A small local tool for reading your Omron monitor without an account or cloud sync. It talks to the monitor directly over Bluetooth using <a href="https://github.com/userx14/omblepy" target="_blank" rel="noopener">omblepy</a>, and stores readings as plain CSV files on your machine.</div>
+  <div class="footer-note">Closing this window stops BP Reader. Readings are stored as plain CSV files on this computer and never leave it. Bluetooth is handled by <a href="https://github.com/userx14/omblepy" target="_blank" rel="noopener">omblepy</a>.</div>
+</div>
+
+<!-- Devices -->
+<div class="overlay" id="devicesOverlay" hidden onclick="if (event.target === this) closeDevices()">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="devicesTitle">
+    <div class="sheet-head"><h2 id="devicesTitle">Devices</h2><button onclick="closeDevices()">Done</button></div>
+    <div id="deviceCards"></div>
+
+    <h3 id="addTitle">Add or replace a monitor</h3>
+    <div class="wizard">
+      <ol class="steps">
+        <li><div class="field" style="flex:1">Model<select id="modelSelect" onchange="renderWizardSlots()"></select></div></li>
+        <li><span>On the monitor, hold the <b>Connection</b> button until a flashing <b>P</b> appears.</span></li>
+        <li><div style="flex:1">
+          <div class="row"><button data-ble onclick="scan()">Scan</button><span class="muted" id="scanStatus"></span></div>
+          <div id="scanList"></div>
+          <div class="row" style="margin-top:8px">
+            <label class="field">Monitor address<input type="text" id="macInput" placeholder="00:11:22:33:44:55"></label>
+            <label class="field">Name<input type="text" id="nameInput" placeholder="BP7455CAN"></label>
+          </div>
+        </div></li>
+        <li><div style="flex:1"><span>Whose readings are on it?</span><div id="wizardSlots"></div></div></li>
+      </ol>
+      <div class="row"><button class="primary" data-ble onclick="pairNew()">Pair</button></div>
+      <div class="status" id="pairStatus"></div>
+      <details id="pairDetails" hidden><summary>Details</summary><pre id="pairLog"></pre></details>
+      <p class="muted" style="margin-top:10px">A monitor stays paired with one device at a time: pairing it here disconnects it from the Omron phone app until it's paired there again. Worth mentioning when you borrow someone's monitor.</p>
+    </div>
+
+    <div class="sheet-foot">
+      <span class="muted">Closing the window also stops the app.</span>
+      <button class="danger" onclick="quitApp()">Quit BP Reader</button>
+    </div>
+  </div>
 </div>
 
 <script>
-let currentUser = 'user1';
-let allRecords = {user1: [], user2: []};
-// Datetimes returned by the most recent sync -- used to highlight just-
-// downloaded readings differently from ones that were already stored.
-let newDatetimes = {user1: new Set(), user2: new Set()};
 const VISIBLE_ROWS = 8;
+let state = {devices: [], people: [], models: [], active_device: null};
+let records = {};
+let newDatetimes = {};     // person id -> Set of datetimes from the last sync
+let currentPerson = null;
+let selectedMac = '';
+
+const $ = (id) => document.getElementById(id);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)};
+  const res = await fetch(path, opts);
+  let data;
+  try { data = await res.json(); } catch (e) { data = {ok: false, error: `Unexpected reply (${res.status})`}; }
+  return data;
+}
+
+function applyState(data) {
+  for (const k of ['devices', 'people', 'models', 'active_device', 'default_model']) {
+    if (k in data) state[k] = data[k];
+  }
+}
 
 // Only one Bluetooth operation can run at a time (the server enforces this
-// too). Disabling the buttons stops accidental double-clicks from queuing a
-// second scan/pair/sync while the first is still talking to the monitor.
+// too); disabling the buttons stops double-clicks from queueing another.
 function setBleBusy(busy) {
   document.querySelectorAll('[data-ble]').forEach(b => { b.disabled = busy; });
 }
 
-// Scans for nearby BLE devices and lists them for the user to pick from
-// (triggered by the "Scan for device" button).
-async function scan() {
-  const status = document.getElementById('setupStatus');
-  const list = document.getElementById('deviceList');
-  status.textContent = 'Scanning for nearby Bluetooth devices (6s)...';
-  status.className = 'status';
-  list.innerHTML = '';
-  setBleBusy(true);
-  try {
-    const res = await fetch('/api/scan');
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    if (data.devices.length === 0) {
-      status.textContent = 'No BLE devices found. Make sure the monitor is on and, for first pairing, hold its Bluetooth button until "-P-" blinks.';
-      return;
-    }
-    status.textContent = `Found ${data.devices.length} device(s). Click yours below (likely the strongest signal / named entry).`;
-    data.devices.forEach(d => {
-      const el = document.createElement('div');
-      el.className = 'device-item';
-      // textContent, not innerHTML: device names come from any Bluetooth
-      // device in radio range, so a crafted name could otherwise inject
-      // script into this page (which can read your readings).
-      const nameEl = document.createElement('span');
-      nameEl.textContent = d.name;
-      const macEl = document.createElement('span');
-      macEl.className = 'mac';
-      macEl.textContent = `${d.mac} · ${d.rssi} dBm`;
-      el.append(nameEl, macEl);
-      el.onclick = () => { document.getElementById('macInput').value = d.mac; };
-      list.appendChild(el);
-    });
-  } catch (e) {
-    status.textContent = 'Scan failed: ' + e.message;
-    status.className = 'status error';
-  } finally {
-    setBleBusy(false);
-  }
+function activeDevice() {
+  return state.devices.find(d => d.id === state.active_device) || null;
 }
 
-// One-time key exchange with the monitor. Only needs to succeed once per
-// monitor -- see /api/pair on the server side for what it actually does.
-async function pair() {
-  const mac = document.getElementById('macInput').value.trim();
-  const status = document.getElementById('setupStatus');
-  if (!mac) { status.textContent = 'Pick or enter a MAC address first.'; status.className = 'status error'; return; }
-  status.textContent = 'Pairing... on the monitor, hold the Bluetooth button until "-P-" blinks, then wait.';
-  status.className = 'status';
-  setBleBusy(true);
-  try {
-    const res = await fetch('/api/pair', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac})});
-    const data = await res.json();
-    status.textContent = (data.stdout || '') + (data.stderr || '') + (data.error || '');
-    status.className = data.ok ? 'status' : 'status error';
-    if (data.ok) status.textContent += '\n\nPaired. You can Sync now.';
-  } catch (e) {
-    status.textContent = 'Pairing failed: ' + e.message;
-    status.className = 'status error';
-  } finally {
-    setBleBusy(false);
-  }
+function personName(id) {
+  const p = state.people.find(p => p.id === id);
+  return p ? p.name : 'Unknown';
 }
 
-// Downloads readings from the monitor and re-renders the table/chart.
-// newOnly=true uses the monitor's own unread-record counter instead of
-// re-reading everything, which is faster for routine use.
-async function sync(newOnly) {
-  const mac = document.getElementById('macInput').value.trim();
-  const status = document.getElementById('syncStatus');
-  if (!mac) { status.textContent = 'Pair a device first.'; status.className = 'status error'; return; }
-  status.textContent = 'Syncing... this can take a bit. The monitor should be showing its flashing transfer symbol: if not, press the Connection button on its back once.';
-  status.className = 'status';
-  setBleBusy(true);
-  try {
-    const res = await fetch('/api/sync', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({mac, new_only: newOnly, time_sync: false})
-    });
-    const data = await res.json();
-    let text = (data.stdout || '') + (data.stderr || '') + (data.error || '');
-    // The usual failure: the monitor wasn't in transfer mode, so it wasn't
-    // broadcasting. Say what to do instead of leaving just the raw error.
-    if (!data.ok && /not advertising/i.test(text)) {
-      text += '\n\nThe monitor wasn\'t ready to send. Press the Connection button on the back of the monitor once (a short press) so the transfer symbol flashes, then click Sync again right away.';
-    }
-    status.textContent = text;
-    status.className = data.ok ? 'status' : 'status error';
-    if (data.ok && data.records) {
-      allRecords = data.records;
-      newDatetimes = {
-        user1: new Set((data.new_datetimes && data.new_datetimes.user1) || []),
-        user2: new Set((data.new_datetimes && data.new_datetimes.user2) || []),
-      };
-      renderUser();
-    }
-  } catch (e) {
-    status.textContent = 'Sync failed: ' + e.message;
-    status.className = 'status error';
-  } finally {
-    setBleBusy(false);
-  }
+function formatWhen(dt) {
+  if (!dt) return '';
+  const d = new Date(dt.replace(' ', 'T'));
+  return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 }
 
-function switchUser(u) {
-  currentUser = u;
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.user === u));
-  renderUser();
+// ------------------------------------------------------------ main screen
+
+function renderMain() {
+  const dev = activeDevice();
+  $('setupCard').hidden = !!dev;
+  $('syncCard').hidden = !dev;
+  $('deviceChip').classList.toggle('ok', !!dev);
+  $('deviceChipText').textContent = dev ? `${dev.name} · paired` : 'No monitor set up';
+  $('lastSync').textContent = dev && dev.last_sync ? `Last synced ${formatWhen(dev.last_sync)}` : '';
+  renderTabs();
+  renderReadings();
 }
 
-// Renders the readings table for the current user: newest readings get
-// the accent color, everything past VISIBLE_ROWS collapses behind a
-// "Show N older readings" toggle so a long history doesn't dominate the page.
-function renderUser() {
-  const recs = allRecords[currentUser] || [];
-  const isNew = newDatetimes[currentUser] || new Set();
-  const body = document.getElementById('recordsBody');
-  const empty = document.getElementById('emptyState');
+function renderTabs() {
+  const tabs = $('peopleTabs');
+  tabs.innerHTML = '';
+  if (!state.people.some(p => p.id === currentPerson)) currentPerson = state.people[0] ? state.people[0].id : null;
+  state.people.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (p.id === currentPerson ? ' active' : '');
+    b.textContent = p.name;   // textContent: names are user input
+    b.onclick = () => { currentPerson = p.id; renderTabs(); renderReadings(); };
+    tabs.appendChild(b);
+  });
+}
+
+// Newest readings first; just-synced ones are highlighted, and everything
+// past VISIBLE_ROWS collapses behind a toggle.
+function renderReadings() {
+  const recs = records[currentPerson] || [];
+  const isNew = newDatetimes[currentPerson] || new Set();
+  const body = $('recordsBody');
   body.innerHTML = '';
-  empty.style.display = recs.length ? 'none' : 'block';
+  $('emptyState').style.display = recs.length ? 'none' : 'block';
 
-  const rowHtml = (r) => {
-    const cls = isNew.has(r.datetime) ? 'new-value' : 'old-value';
+  const makeRow = (r, cls) => {
+    const tr = document.createElement('tr');
+    if (cls) tr.className = cls;
+    const fresh = isNew.has(r.datetime);
     const flags = [r.irregular_heartbeat ? 'irregular heartbeat' : null, r.movement ? 'movement' : null].filter(Boolean).join(', ');
-    return `<td class="${cls}">${r.datetime}</td><td class="${cls}">${r.systolic}</td><td class="${cls}">${r.diastolic}</td><td class="${cls}">${r.pulse}</td><td class="flag">${flags}</td>`;
+    tr.innerHTML = `<td>${r.datetime}${fresh ? '<span class="new-badge">new</span>' : ''}</td>` +
+      `<td>${r.systolic}</td><td>${r.diastolic}</td><td>${r.pulse}</td><td class="flag">${flags}</td>`;
+    if (fresh) tr.querySelectorAll('td:not(.flag)').forEach(td => td.classList.add('new-value'));
+    return tr;
   };
 
-  recs.slice(0, VISIBLE_ROWS).forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = rowHtml(r);
-    body.appendChild(tr);
-  });
-
+  recs.slice(0, VISIBLE_ROWS).forEach(r => body.appendChild(makeRow(r)));
   const older = recs.slice(VISIBLE_ROWS);
   if (older.length) {
     const toggle = document.createElement('tr');
     toggle.className = 'toggle-row';
-    toggle.innerHTML = `<td colspan="5">Show ${older.length} older reading${older.length === 1 ? '' : 's'}</td>`;
+    const label = () => `Show ${plural(older.length, 'older reading')}`;
+    toggle.innerHTML = `<td colspan="5">${label()}</td>`;
     let expanded = false;
     toggle.onclick = () => {
       expanded = !expanded;
-      toggle.querySelector('td').textContent = expanded
-        ? 'Hide older readings'
-        : `Show ${older.length} older reading${older.length === 1 ? '' : 's'}`;
+      toggle.querySelector('td').textContent = expanded ? 'Hide older readings' : label();
       body.querySelectorAll('tr.compact-row').forEach(row => { row.style.display = expanded ? 'table-row' : 'none'; });
     };
     body.appendChild(toggle);
-    older.forEach(r => {
-      const tr = document.createElement('tr');
-      tr.className = 'compact-row';
-      tr.innerHTML = rowHtml(r);
-      body.appendChild(tr);
-    });
+    older.forEach(r => body.appendChild(makeRow(r, 'compact-row')));
   }
-
   drawSparkline(recs);
 }
 
-// Compact, dependency-free trend line. No axes, no labels, no legend
-// beyond the two dots below it -- just enough to see the shape of things.
+// Compact, dependency-free trend line -- just enough to see the shape.
 function drawSparkline(recs) {
-  const container = document.getElementById('chartContainer');
+  const container = $('chartContainer');
   const sorted = [...recs].sort((a, b) => a.datetime.localeCompare(b.datetime));
   if (sorted.length < 2) {
-    container.innerHTML = '<div class="empty" style="padding:10px 0;">Not enough readings yet for a trend line.</div>';
+    container.innerHTML = '<div class="empty" style="padding:8px 0;">Not enough readings yet for a trend line.</div>';
     return;
   }
-  const sys = sorted.map(r => r.systolic);
-  const dia = sorted.map(r => r.diastolic);
+  const sys = sorted.map(r => r.systolic), dia = sorted.map(r => r.diastolic);
   const all = sys.concat(dia);
-  const min = Math.min(...all) - 5;
-  const max = Math.max(...all) + 5;
+  const min = Math.min(...all) - 5, max = Math.max(...all) + 5;
   const w = 600, h = 56;
-  const toPoints = (vals) => vals.map((v, i) =>
-    `${(i / (vals.length - 1)) * w},${h - ((v - min) / (max - min)) * h}`
-  ).join(' ');
+  const pts = (vals) => vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - min) / (max - min)) * h}`).join(' ');
   container.innerHTML = `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
-    <polyline points="${toPoints(dia)}" fill="none" stroke="#5a7fae" stroke-width="2" />
-    <polyline points="${toPoints(sys)}" fill="none" stroke="#7c93c9" stroke-width="2" />
+    <polyline points="${pts(dia)}" fill="none" stroke="#5a7fae" stroke-width="2" />
+    <polyline points="${pts(sys)}" fill="none" stroke="#7c93c9" stroke-width="2" />
   </svg>`;
 }
 
-// Triggers a direct download of the CSV for the current user. The
-// "average" toggle asks the server to compute averaged sessions on the
-// fly for this download only -- nothing about how readings are stored
-// changes either way.
+// ------------------------------------------------------------ sync
+
+// Turns omblepy's raw output into one line a person can act on. The raw
+// text stays available under Details.
+const BT_UNAVAILABLE = "This computer's Bluetooth looks off or unavailable. Turn Bluetooth on and try again.";
+const isBtUnavailable = (text) =>
+  /bluetooth.*(off|not available|unavailable|powered)|org\.bluez|no bluetooth adapter|ServiceUnknown/i.test(text);
+
+function friendlyError(text) {
+  if (/not advertising/i.test(text)) {
+    return "Monitor not found. Press the Connection button on its back once so the transfer symbol flashes, then press Sync right away. A flashing P means pairing mode: press START/STOP and try again.";
+  }
+  if (/already running/i.test(text)) return text;
+  if (/pairing key|unlock|not paired/i.test(text)) {
+    return "The monitor didn't accept this computer. Pair it again from Devices (the gear icon).";
+  }
+  if (isBtUnavailable(text)) return BT_UNAVAILABLE;
+  return "Sync didn't finish. Details has what went wrong.";
+}
+
+function showLog(detailsId, logId, text) {
+  $(logId).textContent = text || '';
+  $(detailsId).hidden = !text;
+  $(detailsId).open = false;
+}
+
+async function sync() {
+  const dev = activeDevice();
+  if (!dev) return;
+  const status = $('syncStatus');
+  let left = 30;
+  const tick = () => {
+    status.className = 'status';
+    status.textContent = left > 0 ? `Looking for your monitor… ${left}s` : 'Still working…';
+    left -= 1;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  showLog('syncDetails', 'syncLog', '');
+  setBleBusy(true);
+  try {
+    const data = await api('/api/sync', {device_id: dev.id});
+    clearInterval(timer);
+    const log = (data.stdout || '') + (data.stderr || '') + (data.error || '');
+    showLog('syncDetails', 'syncLog', log);
+    applyState(data);
+    if (data.ok) {
+      records = data.records || records;
+      newDatetimes = {};
+      const parts = [];
+      let total = 0, firstWithNew = null;
+      for (const [pid, list] of Object.entries(data.new_datetimes || {})) {
+        newDatetimes[pid] = new Set(list);
+        if (list.length) {
+          total += list.length;
+          parts.push(`${personName(pid)} (${list.length})`);
+          firstWithNew = firstWithNew || pid;
+        }
+      }
+      if (firstWithNew) currentPerson = firstWithNew;
+      status.className = 'status good';
+      status.textContent = total
+        ? `${plural(total, 'new reading')}${parts.length > 1 ? ' for ' + parts.join(', ') : ''}`
+        : 'Up to date: no new readings on the monitor.';
+    } else {
+      status.className = 'status error';
+      status.textContent = friendlyError(log);
+    }
+    renderMain();
+  } catch (e) {
+    clearInterval(timer);
+    status.className = 'status error';
+    status.textContent = "Couldn't reach BP Reader. If you closed it, start it again from its icon.";
+  } finally {
+    setBleBusy(false);
+  }
+}
+
+// ------------------------------------------------------------ people
+
+function personOptions(selected) {
+  const opts = state.people.map(p => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.name; o.selected = p.id === selected;
+    return o;
+  });
+  const add = document.createElement('option');
+  add.value = '__new'; add.textContent = 'New person…';
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = "Don't import"; none.selected = !selected;
+  return [...opts, add, none];
+}
+
+// A select of people; "New person…" asks for a name, creates them, and
+// selects them. onPick(personId) runs after any change.
+function personSelect(selected, onPick) {
+  const sel = document.createElement('select');
+  sel.append(...personOptions(selected));
+  let previous = selected || '';
+  sel.onchange = async () => {
+    if (sel.value === '__new') {
+      const name = (prompt('Name for the new person:') || '').trim();
+      if (!name) { sel.value = previous; return; }
+      const data = await api('/api/people', {name});
+      if (!data.ok) { alert(data.error || 'Could not add that person.'); sel.value = previous; return; }
+      applyState(data);
+      sel.innerHTML = '';
+      sel.append(...personOptions(data.person.id));
+      renderTabs();
+    }
+    previous = sel.value;
+    if (onPick) await onPick(sel.value || null);
+  };
+  return sel;
+}
+
+async function renamePerson() {
+  if (!currentPerson) return;
+  const name = (prompt('New name:', personName(currentPerson)) || '').trim();
+  if (!name) return;
+  const data = await api(`/api/people/${currentPerson}/rename`, {name});
+  if (!data.ok) { alert(data.error || 'Could not rename.'); return; }
+  applyState(data);
+  renderMain();
+  if (!$('devicesOverlay').hidden) renderDevices();
+}
+
+// ------------------------------------------------------------ devices
+
+function openDevices(focusAdd) {
+  renderDevices();
+  $('devicesOverlay').hidden = false;
+  if (focusAdd || !state.devices.length) $('addTitle').scrollIntoView({block: 'start'});
+}
+
+function closeDevices() {
+  $('devicesOverlay').hidden = true;
+  renderMain();
+}
+
+function slotLabel(i, slots) {
+  return slots === 1 ? 'Monitor readings' : `Monitor user ${i}`;
+}
+
+function renderDevices() {
+  const box = $('deviceCards');
+  box.innerHTML = '';
+  if (!state.devices.length) {
+    box.innerHTML = '<p class="muted">No monitors yet. Add one below.</p>';
+  }
+  state.devices.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'device-card';
+    const top = document.createElement('div');
+    top.className = 'top';
+    const info = document.createElement('div');
+    info.style.marginRight = 'auto';
+    const name = document.createElement('div');
+    name.className = 'name'; name.textContent = d.name;
+    const meta = document.createElement('div');
+    meta.className = 'muted'; meta.textContent = `${d.model_name} · ${d.mac}` + (d.last_sync ? ` · last synced ${formatWhen(d.last_sync)}` : '');
+    info.append(name, meta);
+    top.appendChild(info);
+    if (d.id === state.active_device) {
+      const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Used for Sync';
+      top.appendChild(b);
+    } else {
+      const use = document.createElement('button'); use.textContent = 'Use for Sync';
+      use.onclick = async () => { applyState(await api(`/api/devices/${d.id}/activate`, {})); renderDevices(); renderMain(); };
+      top.appendChild(use);
+    }
+    const rename = document.createElement('button'); rename.className = 'link'; rename.textContent = 'Rename';
+    rename.onclick = async () => {
+      const n = (prompt('Monitor name:', d.name) || '').trim();
+      if (!n) return;
+      applyState(await api(`/api/devices/${d.id}/update`, {name: n})); renderDevices(); renderMain();
+    };
+    const remove = document.createElement('button'); remove.className = 'link danger'; remove.textContent = 'Remove';
+    remove.onclick = async () => {
+      if (!confirm(`Remove ${d.name}? Readings already imported from it stay.`)) return;
+      applyState(await api(`/api/devices/${d.id}/remove`, {})); renderDevices(); renderMain();
+    };
+    top.append(rename, remove);
+    card.appendChild(top);
+
+    for (let i = 1; i <= d.slots; i++) {
+      const row = document.createElement('div');
+      row.className = 'slot-row';
+      const lbl = document.createElement('span'); lbl.textContent = `${slotLabel(i, d.slots)} →`;
+      const sel = personSelect((d.users || {})[String(i)], async () => {
+        const users = {};
+        card.querySelectorAll('select').forEach((s, idx) => { users[String(idx + 1)] = s.value && s.value !== '__new' ? s.value : null; });
+        applyState(await api(`/api/devices/${d.id}/update`, {users}));
+        renderMain();
+      });
+      row.append(lbl, sel);
+      card.appendChild(row);
+    }
+    box.appendChild(card);
+  });
+
+  const modelSel = $('modelSelect');
+  const keep = modelSel.value || state.default_model;
+  modelSel.innerHTML = '';
+  state.models.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.id; o.textContent = m.name; o.selected = m.id === keep;
+    modelSel.appendChild(o);
+  });
+  renderWizardSlots();
+}
+
+// Defaults copy the monitor in use (the usual case: replacing your own
+// monitor); pick "New person…" for someone else's.
+function renderWizardSlots() {
+  const model = state.models.find(m => m.id === $('modelSelect').value);
+  const slots = model ? model.users : 2;
+  const current = activeDevice();
+  const box = $('wizardSlots');
+  box.innerHTML = '';
+  for (let i = 1; i <= slots; i++) {
+    const fallback = state.people[i - 1] ? state.people[i - 1].id : null;
+    const pre = current ? (current.users || {})[String(i)] : fallback;
+    const row = document.createElement('div');
+    row.className = 'slot-row';
+    const lbl = document.createElement('span'); lbl.textContent = `${slotLabel(i, slots)} →`;
+    row.append(lbl, personSelect(pre === undefined ? fallback : pre));
+    box.appendChild(row);
+  }
+  if (!$('nameInput').value && model) $('nameInput').placeholder = model.name.replace(/ \(.*\)$/, '');
+}
+
+async function scan() {
+  const status = $('scanStatus');
+  const list = $('scanList');
+  status.textContent = 'Scanning (6s)…';
+  list.innerHTML = '';
+  setBleBusy(true);
+  try {
+    const data = await api('/api/scan');
+    if (!data.ok) throw new Error(data.error);
+    if (!data.devices.length) {
+      status.textContent = 'Nothing found. Is the P flashing on the monitor?';
+      return;
+    }
+    status.textContent = 'Pick your monitor (usually the strongest signal).';
+    data.devices.forEach(d => {
+      const b = document.createElement('button');
+      b.className = 'scan-item';
+      // textContent, not innerHTML: device names come from any Bluetooth
+      // device in radio range, so a crafted name could otherwise inject
+      // script into this page (which can read your readings).
+      const n = document.createElement('span'); n.textContent = d.name;
+      const m = document.createElement('span'); m.className = 'mac'; m.textContent = `${d.mac} · ${d.rssi} dBm`;
+      b.append(n, m);
+      b.onclick = () => {
+        list.querySelectorAll('.scan-item').forEach(x => x.classList.remove('selected'));
+        b.classList.add('selected');
+        $('macInput').value = d.mac;
+      };
+      list.appendChild(b);
+    });
+  } catch (e) {
+    status.textContent = isBtUnavailable(e.message) ? BT_UNAVAILABLE : 'Scan failed: ' + e.message;
+  } finally {
+    setBleBusy(false);
+  }
+}
+
+async function pairNew() {
+  const mac = $('macInput').value.trim();
+  const status = $('pairStatus');
+  if (!mac) { status.className = 'status error'; status.textContent = 'Scan and pick your monitor first.'; return; }
+  const users = {};
+  $('wizardSlots').querySelectorAll('select').forEach((s, i) => { users[String(i + 1)] = s.value && s.value !== '__new' ? s.value : null; });
+  status.className = 'status';
+  status.textContent = 'Pairing… keep the P flashing on the monitor.';
+  showLog('pairDetails', 'pairLog', '');
+  setBleBusy(true);
+  try {
+    const data = await api('/api/pair', {mac, model: $('modelSelect').value, name: $('nameInput').value.trim(), users});
+    const log = (data.stdout || '') + (data.stderr || '') + (data.error || '');
+    showLog('pairDetails', 'pairLog', log);
+    if (data.ok) {
+      applyState(data);
+      status.className = 'status good';
+      status.textContent = 'Paired, and OK should show on the monitor. It\'s now the one Sync uses.';
+      $('macInput').value = ''; $('nameInput').value = ''; $('scanList').innerHTML = ''; $('scanStatus').textContent = '';
+      renderDevices();
+      renderMain();
+    } else {
+      status.className = 'status error';
+      status.textContent = /not advertising/i.test(log)
+        ? 'Monitor not found. Hold the Connection button until a flashing P appears, then press Pair again.'
+        : (data.error && !data.stdout ? data.error : friendlyError(log));
+    }
+  } catch (e) {
+    status.className = 'status error';
+    status.textContent = "Couldn't reach BP Reader.";
+  } finally {
+    setBleBusy(false);
+  }
+}
+
+// ------------------------------------------------------------ misc
+
 function exportCsv() {
-  const idx = currentUser === 'user1' ? 1 : 2;
-  const averaged = document.getElementById('averageExportCheck').checked;
-  window.location = `/api/export/${idx}${averaged ? '?averaged=true' : ''}`;
+  if (!currentPerson) return;
+  const averaged = $('averageExportCheck').checked;
+  window.location = `/api/export/${currentPerson}${averaged ? '?averaged=true' : ''}`;
 }
 
-// Asks the server to pop the OS's file manager at the readings folder.
 async function openFolder() {
-  try {
-    const res = await fetch('/api/open-folder', {method: 'POST'});
-    const data = await res.json();
-    if (!data.ok) alert('Could not open the folder: ' + (data.error || 'unknown error'));
-  } catch (e) {
-    alert('Could not open the folder: ' + e.message);
-  }
+  const data = await api('/api/open-folder', {}).catch(e => ({ok: false, error: e.message}));
+  if (!data.ok) alert('Could not open the folder: ' + (data.error || 'unknown error'));
 }
 
-// Actually stops the background app (see server.py's /api/shutdown).
-// Closing this tab alone does NOT do this -- the server keeps running
-// so you can reopen the page without re-launching the app.
+function showStopped() {
+  document.body.innerHTML = '<div style="padding:60px 20px; text-align:center; color:#9a9a9e; font-family:sans-serif;">BP Reader has stopped. You can close this window.</div>';
+}
+
 async function quitApp() {
-  if (!confirm('Stop the BP Reader app? You can start it again any time from its icon.')) return;
-  try {
-    await fetch('/api/shutdown', {method: 'POST'});
-  } catch (e) {
-    // The request itself failing is expected -- the server exits right
-    // after responding, so the connection often just drops.
-  }
-  document.body.innerHTML = '<div style="padding:60px 20px; text-align:center; color:#9a9a9e; font-family:sans-serif;">' +
-    'BP Reader has stopped. You can close this tab.</div>';
+  if (!confirm('Quit BP Reader?')) return;
+  try { await fetch('/api/shutdown', {method: 'POST'}); } catch (e) { /* expected: it exits right away */ }
+  showStopped();
 }
 
-// load any existing data on page load
+// Keeps the app alive while this window is open: when the last window
+// closes, the server notices this connection drop and shuts down. If the
+// server goes away instead, say so rather than leaving a dead page.
+function watchServer() {
+  const es = new EventSource('/api/events');
+  let check = null;
+  es.onopen = () => clearTimeout(check);
+  es.onerror = () => {
+    clearTimeout(check);
+    check = setTimeout(async () => {
+      try { await fetch('/api/ping'); } catch (e) { es.close(); showStopped(); }
+    }, 4000);
+  };
+}
+
 (async function init() {
+  watchServer();
   try {
-    const res = await fetch('/api/records');
-    const data = await res.json();
-    if (data.ok) { allRecords = data.records; renderUser(); }
+    const [s, r] = await Promise.all([api('/api/state'), api('/api/records')]);
+    if (s.ok) applyState(s);
+    if (r.ok) records = r.records;
   } catch (e) {}
+  renderMain();
+  if (!state.devices.length) openDevices(true);
 })();
 </script>
 </body>

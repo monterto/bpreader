@@ -43,74 +43,137 @@ core hardware sold under a few different model numbers/regions (e.g.
 BP7450). If your monitor is a 10 Series device, there's a decent chance
 this works for you as-is.
 
-For other Omron models, check
-[omblepy's device compatibility table](https://github.com/userx14/omblepy#omron-device-support-matrix) —
-if your model is listed there, you can likely get this working by changing
-`DEVICE_PROFILE` in `omron_reader.py` to match. Contributions adding proper
-multi-device support are welcome.
+Other Omron models that omblepy supports can be picked when adding a monitor
+(gear icon → Devices). Check
+[omblepy's device compatibility table](https://github.com/userx14/omblepy#omron-device-support-matrix)
+for how well each one is tested.
 
 ## Installing
 
-### Linux — AppImage (recommended)
+> **Tested on one setup only.** This is a personal project, built for and
+> tested on the author's own machine: **Bazzite (Fedora 45) with an Omron
+> BP7455CAN**, using the AppImage built on Fedora 45. Every other option
+> below is provided as-is: the scripts exist and should work, but they
+> haven't been tested, and there's no support. Use at your own risk.
+
+### Linux — AppImage from Releases (the tested route)
+
+Download `BPReader-x86_64.AppImage` from the
+[Releases page](https://github.com/monterto/bpreader/releases). It's built
+on Fedora 45, so it's meant for Fedora-based systems (Bazzite, Fedora,
+Silverblue, …). On other distros, build your own (below).
+
+- **With [Gear Lever](https://flathub.org/apps/it.mijorus.gearlever):** add
+  the AppImage, then set its update source to *GitHub*, repo
+  `monterto/bpreader`, file name `BPReader-x86_64.AppImage`. New releases
+  then show up as updates.
+- **Without it:** `./install_appimage.sh BPReader-x86_64.AppImage` adds a
+  menu entry and Desktop icon, launched in a way that works even without
+  FUSE (AppImages normally need it to mount themselves).
+
+### Linux — build the AppImage yourself *(untested outside Fedora 45)*
+
+Needs python3 (3.9+) with pip, git, and wget or curl, plus internet for the
+build; the result runs offline.
 
 ```bash
-chmod +x install_appimage.sh
-./install_appimage.sh BPReader-x86_64.AppImage
+git clone https://github.com/monterto/bpreader.git
+cd bpreader
+./build_appimage.sh
 ```
 
-Run once. This adds a real double-click icon to your Desktop and
-application menu, launched in a way that works even on systems without
-FUSE installed (Bazzite, some minimal distros, etc. — AppImages normally
-need FUSE to mount themselves; this sidesteps that entirely).
+Build on the distro you'll run it on: the AppImage bundles that system's
+own Python, which relies on that system's libraries. The script checks the
+bundled Python actually starts before packaging, so a mismatch fails the
+build instead of the app.
 
-Don't have the AppImage built yet? `./build_appimage.sh` builds it from
-source (needs python3 with pip, git, and wget or curl, plus internet for
-that one step; the result runs fully offline after that). Build it on the
-machine you'll run it on: it bundles that machine's own Python.
+On immutable distros (Bazzite, Silverblue), build inside a Fedora toolbox
+or distrobox of the same Fedora version as your system, after
+`sudo dnf install python3-pip git-core` inside it.
 
-### Linux — plain install, no AppImage
+### Windows — build the Linux AppImage with WSL *(how the tested AppImage was first made)*
+
+```powershell
+wsl --install FedoraLinux-45
+```
+
+Then, inside that Fedora shell:
+
+```bash
+sudo dnf install -y python3-pip git-core
+git clone https://github.com/monterto/bpreader.git
+cd bpreader && ./build_appimage.sh
+```
+
+Clone inside WSL rather than building from a Windows folder: a Windows
+checkout can have Windows line endings, which bash can't run. Copy the
+finished AppImage over to your Linux machine.
+
+### GitHub Actions (forks)
+
+`.github/workflows/build-appimage.yml` builds the AppImage on Fedora 45 and
+publishes a release when you push a `v*` tag, or when you run it from the
+Actions tab. Change the Fedora image to match the system you run it on.
+
+### Linux — plain install, no AppImage *(untested)*
 
 ```bash
 ./install.sh
 ```
 
-Same double-click-icon result, but via a normal Python venv instead of an
-AppImage. Useful if you'd rather avoid packaged binaries entirely.
+Same menu entry and Desktop icon, but via a normal Python venv instead of
+an AppImage. Needs python3 with venv, and git.
 
-### Windows
+### Windows — .exe *(untested)*
 
 ```
 build_windows.bat
 ```
 
-Run once (needs Python from python.org, with "Add to PATH" checked during
-install). Produces `dist\BPReader.exe` — a normal double-click executable
-from then on, no console window, no re-running the build step.
+Needs Python from python.org (with "Add to PATH" checked) and git.
+Produces `dist\BPReader.exe`. Bluetooth on Windows goes through a different
+backend than Linux, and none of it has been tried.
 
-### From source (any OS)
+### From source, any OS *(untested beyond Linux)*
 
 ```bash
-git clone https://github.com/userx14/omblepy.git   # sibling folder, or see omron_reader.py
+git clone https://github.com/monterto/bpreader.git
+git clone https://github.com/userx14/omblepy.git   # next to the bpreader folder
+cd bpreader
 python3 -m venv .venv
 source .venv/bin/activate        # .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 python3 server.py
 ```
 
+On macOS, Bluetooth devices show up with an ID instead of a MAC address;
+omblepy accepts either, but this hasn't been tried.
+
 ## Using it
 
-1. **Pair (first time only):** hold the **[Connection]** button on the back
-   of the monitor until its display shows a blinking `-P-`. In the app,
-   click **Scan for device**, pick your monitor from the list, then click
-   **Pair**. Success shows `[OK]` on the monitor.
-2. **Sync:** press the **[Connection]** button on the back of the monitor
-   once (a short press, don't hold it) so the transfer symbol flashes, then
-   click **Sync now** in the app. Readings appear in the table, newest
-   first, with just-downloaded ones highlighted. (Don't use the front
+The app opens in its own window (an app-style window if Chrome, Chromium,
+Brave, Edge or Vivaldi is installed, including as a Flatpak; otherwise a
+normal browser tab). Closing the window stops it.
+
+1. **Set up a monitor (once):** the gear icon opens **Devices**. Under *Add
+   or replace a monitor*, pick the model, hold the **[Connection]** button
+   on the back of the monitor until a blinking `P` appears, click **Scan**,
+   pick your monitor, choose whose readings are on it, then **Pair**.
+   Success shows `OK` on the monitor.
+2. **Sync:** with the monitor off, press the **[Connection]** button on its
+   back once (a short press, don't hold it) so the transfer symbol flashes,
+   then click **Sync**. New readings are highlighted. (Don't use the front
    START/STOP button for this: it starts a measurement.)
-3. **Export:** the "Download CSV" button gives you the raw file directly;
-   it's also always sitting on disk (see below) if you'd rather script
-   against it.
+3. **Export:** **Export CSV** downloads the person you're viewing; the
+   files are also always on disk (see below).
+
+**People and monitors.** Readings are kept per person. Each monitor maps
+its own user slots (most have two) to a person, or to *Don't import*. Your
+monitor might feed *Me* and *Partner*; a friend's borrowed monitor can feed
+a new person (*New person…* in the list), so their readings get their own
+table and CSV and never mix with yours. Replacing your monitor? Add the
+new one: it starts with the same mapping, so your history just continues.
+The mappings can be changed any time in Devices.
 
 A monitor can only stay paired with one device at a time — pairing here
 means the official Omron Connect app (or a paired phone) will stop being
@@ -122,10 +185,13 @@ want.
 
 | OS | Location |
 |---|---|
-| Linux | `~/.local/share/bp-reader/readings/user1/user1.csv` (+ `user2.csv`) |
-| Windows | `%LOCALAPPDATA%\BPReader\readings\user1\user1.csv` |
+| Linux | `~/.local/share/bp-reader/readings/<person>/<person>.csv` |
+| Windows | `%LOCALAPPDATA%\BPReader\readings\<person>\<person>.csv` |
 
-Plain CSV, one row per reading (`datetime,dia,sys,bpm,mov,ihb`).
+Plain CSV, one row per reading (`datetime,dia,sys,bpm,mov,ihb`). The
+original two users keep their `user1` / `user2` folders; people added later
+get folders like `p-alex`. Paired monitors, people and their names are in
+`config.json` next to the `readings` folder.
 
 ## Troubleshooting
 
@@ -161,18 +227,24 @@ while the monitor is off): hold the button for more than 2 seconds until
 `on` appears. Per the BP7455CAN manual, sections 4.2 and 4.3.
 
 **Nothing seems to have changed after an update.**
-The server keeps running in the background after you close the browser
-tab (by design — see below) — a stale instance can end up serving an old
-build. `pkill -f "bpreader/server.py"` (this matches the real process even
-under AppImage's extract-and-run mode, unlike matching on the `.AppImage`
-filename) then relaunch.
+An older copy may still be running: it stops about 15 seconds after its
+last window closes. If it doesn't, `pkill -f "bpreader/server.py"` (this
+matches the real process even under AppImage's extract-and-run mode,
+unlike matching on the `.AppImage` filename) then relaunch.
 
 ## Design notes
 
-- **Closing the browser tab doesn't stop the app.** It keeps running
-  locally so you can reopen the page without a fresh Bluetooth handshake
-  each time. Use the **Quit app** button (or `Ctrl+C` if running from a
-  terminal) to actually stop it.
+- **Closing the window stops the app.** Each open window holds a
+  connection to the local server; about 15 seconds after the last one
+  closes, the server exits (never in the middle of a sync). A page reload
+  doesn't count. **Quit BP Reader** in Devices stops it immediately. To
+  keep it running anyway (e.g. while developing), set
+  `BP_READER_KEEP_RUNNING=1`.
+- **Sync is always a full, read-only download.** omblepy's "new readings
+  only" mode writes the monitor's unread counter to its memory, which
+  omblepy lists as untested on the HEM-7342T; a full read only reads and
+  takes a few seconds. New readings are found by comparing with what's
+  already stored.
 - **No re-implemented protocol.** All BLE communication goes through
   `omblepy`, called in-process rather than reimplemented, specifically to
   avoid the risk of a subtly wrong reverse-engineered command corrupting
@@ -183,9 +255,11 @@ filename) then relaunch.
 ## Project layout
 
 ```
-server.py             Flask app: routes, background-server lifecycle, browser auto-open
-omron_reader.py        Wraps omblepy: bootstraps it, calls it in-process, reads/writes CSVs
-templates/index.html   The entire UI: styling, pairing/sync flow, readings table, chart
+server.py             Flask app: routes, app window, stop-when-closed lifecycle
+omron_reader.py        Wraps omblepy; monitors, people and their readings CSVs
+templates/index.html   The entire UI: sync, readings, Devices screen, chart
+static/icon.svg        App icon (icon.png is the same at 256px, used by the builds)
+.github/workflows/     Builds the AppImage on Fedora and publishes a release
 install.sh             Linux install via plain venv + desktop icon
 install_appimage.sh    Linux install of a pre-built AppImage, FUSE-free
 build_appimage.sh      Builds the self-contained Linux AppImage from source

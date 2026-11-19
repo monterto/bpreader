@@ -1,0 +1,48 @@
+# Builds BPReader-x86_64.AppImage and publishes it as a GitHub Release, so
+# AppImage managers like Gear Lever can update straight from this repo.
+#
+# Runs when a version tag is pushed:
+#     git tag v2.1.0 && git push origin v2.1.0
+# or by hand: Actions tab -> "Build AppImage" -> Run workflow, enter a version.
+#
+# It builds inside Fedora because the AppImage bundles the build system's own
+# Python: building on the Fedora release Bazzite is based on keeps the system
+# libraries it relies on matched. Bump the image when Bazzite moves on.
+name: Build AppImage
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. v2.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:45
+    steps:
+      - name: Install build tools
+        run: dnf install -y python3-pip git-core glibc-common findutils tar file
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: ./build_appimage.sh
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          name: BP Reader ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          files: BPReader-x86_64.AppImage
+          make_latest: true
+          body: |
+            Built automatically on Fedora 45 from ${{ github.sha }}.
+
+            Personal project: only tested on the author's own setup (Bazzite on Fedora 45, Omron BP7455CAN). See the README before using it.

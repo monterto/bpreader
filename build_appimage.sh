@@ -45,7 +45,7 @@ mkdir -p "$APP_ROOT" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 echo "==> Copying app source"
 cp "$HERE/server.py" "$HERE/omron_reader.py" "$APP_ROOT/"
-cp -r "$HERE/templates" "$APP_ROOT/"
+cp -r "$HERE/templates" "$HERE/static" "$APP_ROOT/"
 
 echo "==> Fetching omblepy engine (bundled directly alongside server.py,"
 echo "    matching omron_reader.py's resource lookup)"
@@ -129,6 +129,11 @@ RUNTIME="$APP_SRC/pyruntime"
 cd "$APP_SRC"
 # Fully self-contained interpreter: stdlib, dynamic lib, and dependencies
 # all resolved from inside this AppImage, nothing borrowed from the host.
+# The app removes these again once Python is running (see
+# _clean_child_environment in server.py), so the browser and other
+# programs it starts get the system's own settings.
+export BPREADER_APPIMAGE=1
+export BPREADER_HOST_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 export PYTHONHOME="$RUNTIME"
 export PYTHONPATH="$RUNTIME/site-packages"
 export PYTHONNOUSERSITE=1
@@ -157,7 +162,7 @@ print("    OK: Python " + sys.version.split()[0] + ", app and omblepy import cle
 fi
 rm -rf "$SMOKE_DATA"
 
-echo "==> Writing desktop file + icon"
+echo "==> Adding desktop file + icon"
 cat > "$APPDIR/bpreader.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
@@ -169,34 +174,9 @@ Categories=Utility;
 Terminal=false
 EOF
 
-# The icon is drawn with Pillow, which is only needed here at build time
-# (it isn't bundled into the app). If this Python doesn't have it, fetch it
-# into a throwaway folder inside the build directory.
-ICON_TOOLS=""
-if ! python3 -c 'import PIL' >/dev/null 2>&1; then
-    ICON_TOOLS="$BUILD/icon-tools"
-    python3 -m pip install --quiet --target="$ICON_TOOLS" pillow
-fi
-python3 - "$APPDIR" "$ICON_TOOLS" <<'PYEOF'
-import sys
-appdir, tools = sys.argv[1], sys.argv[2]
-if tools:
-    sys.path.insert(0, tools)
-from PIL import Image, ImageDraw
-size = 256
-img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-d = ImageDraw.Draw(img)
-# Neutral grey background + slate blue accent, matching the app's theme.
-d.rounded_rectangle([8, 8, size-8, size-8], radius=48, fill=(26,26,28,255), outline=(124,147,201,255), width=6)
-# Two trend lines (systolic/diastolic), echoing the app's own sparkline chart.
-pts_sys = [(36,160),(76,160),(96,96),(116,196),(136,64),(156,160),(220,160)]
-pts_dia = [(36,180),(76,178),(96,150),(116,190),(136,120),(156,175),(220,172)]
-d.line(pts_dia, fill=(90,127,174,255), width=7, joint='curve')
-d.line(pts_sys, fill=(124,147,201,255), width=9, joint='curve')
-for p in [appdir + "/usr/share/icons/hicolor/256x256/apps/bpreader.png",
-          appdir + "/bpreader.png"]:
-    img.save(p)
-PYEOF
+# The icon lives in the repo (static/icon.svg, with a 256px PNG next to it).
+cp "$HERE/static/icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/bpreader.png"
+cp "$HERE/static/icon.png" "$APPDIR/bpreader.png"
 
 echo "==> Downloading appimagetool"
 if [ ! -f "$HERE/appimagetool.AppImage" ]; then

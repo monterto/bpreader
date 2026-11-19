@@ -47,6 +47,7 @@ if not exist omblepy_src (
 echo ==> Building BPReader.exe (this can take a minute or two)
 pyinstaller --noconfirm --onefile --windowed --name BPReader ^
     --add-data "templates;templates" ^
+    --add-data "static;static" ^
     --add-data "omblepy_src;omblepy" ^
     --collect-all bleak ^
     --hidden-import terminaltables ^
