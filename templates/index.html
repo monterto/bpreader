@@ -299,7 +299,7 @@ async function sync(newOnly) {
   const mac = document.getElementById('macInput').value.trim();
   const status = document.getElementById('syncStatus');
   if (!mac) { status.textContent = 'Pair a device first.'; status.className = 'status error'; return; }
-  status.textContent = 'Syncing... this can take a bit.';
+  status.textContent = 'Syncing... this can take a bit. The monitor should be showing its flashing transfer symbol: if not, press the Connection button on its back once.';
   status.className = 'status';
   setBleBusy(true);
   try {
@@ -308,7 +308,13 @@ async function sync(newOnly) {
       body: JSON.stringify({mac, new_only: newOnly, time_sync: false})
     });
     const data = await res.json();
-    status.textContent = (data.stdout || '') + (data.stderr || '') + (data.error || '');
+    let text = (data.stdout || '') + (data.stderr || '') + (data.error || '');
+    // The usual failure: the monitor wasn't in transfer mode, so it wasn't
+    // broadcasting. Say what to do instead of leaving just the raw error.
+    if (!data.ok && /not advertising/i.test(text)) {
+      text += '\n\nThe monitor wasn\'t ready to send. Press the Connection button on the back of the monitor once (a short press) so the transfer symbol flashes, then click Sync again right away.';
+    }
+    status.textContent = text;
     status.className = data.ok ? 'status' : 'status error';
     if (data.ok && data.records) {
       allRecords = data.records;

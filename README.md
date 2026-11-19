@@ -99,13 +99,15 @@ python3 server.py
 
 ## Using it
 
-1. **Pair (first time only):** hold the monitor's Bluetooth button until
-   its display shows a blinking `-P-`. In the app, click **Scan for
-   device**, pick your monitor from the list, then click **Pair**. Success
-   shows `[OK]` on the monitor.
-2. **Sync:** wake the monitor (press its power button once so the screen
-   is on), then click **Sync now** in the app. Readings appear in the
-   table, newest first, with just-downloaded ones highlighted.
+1. **Pair (first time only):** hold the **[Connection]** button on the back
+   of the monitor until its display shows a blinking `-P-`. In the app,
+   click **Scan for device**, pick your monitor from the list, then click
+   **Pair**. Success shows `[OK]` on the monitor.
+2. **Sync:** press the **[Connection]** button on the back of the monitor
+   once (a short press, don't hold it) so the transfer symbol flashes, then
+   click **Sync now** in the app. Readings appear in the table, newest
+   first, with just-downloaded ones highlighted. (Don't use the front
+   START/STOP button for this: it starts a measurement.)
 3. **Export:** the "Download CSV" button gives you the raw file directly;
    it's also always sitting on disk (see below) if you'd rather script
    against it.
@@ -150,9 +152,13 @@ trusted: `bluetoothctl trust <MAC>` (the app also does this automatically
 after a successful pair, going forward).
 
 **Sync fails with "not advertising within 30s."**
-The monitor's screen has gone idle and it's stopped broadcasting
-Bluetooth. Press its power button once to wake it, then sync again
-promptly.
+The monitor isn't broadcasting over Bluetooth. Press the **[Connection]**
+button on its back once (short press) so the transfer symbol flashes, then
+click Sync again right away; the monitor turns itself off after 2 minutes.
+If `oFF` flashes when you press it, the monitor's Bluetooth has been
+switched off (that happens if the button is held for more than 10 seconds
+while the monitor is off): hold the button for more than 2 seconds until
+`on` appears. Per the BP7455CAN manual, sections 4.2 and 4.3.
 
 **Nothing seems to have changed after an update.**
 The server keeps running in the background after you close the browser
