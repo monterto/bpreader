@@ -1,15 +1,44 @@
 #!/bin/bash
 # Builds BPReader-x86_64.AppImage from this source folder.
-# Run from inside the bpapp/ folder: ./build_appimage.sh
+# Run it from anywhere: ./build_appimage.sh (or path/to/build_appimage.sh)
 #
-# Needs: python3, git, wget, internet access for this one build step.
-# The resulting AppImage runs fully offline.
+# Needs: python3 (3.9+) with pip, git, and wget or curl, plus internet
+# access for this one build step. The resulting AppImage runs fully offline.
+#
+# The bundled Python is a copy of this machine's own, so build on the same
+# distro (ideally the same machine) you'll run the AppImage on.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${0}")" && pwd)"
 BUILD="$HERE/appimage_build"
 APPDIR="$BUILD/AppDir"
 APP_ROOT="$APPDIR/usr/share/bpreader"
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Download to a temporary name first, so a failed download never leaves a
+# half-written file behind that a later run would mistake for a good one.
+download() {
+    if command -v wget >/dev/null 2>&1; then
+        wget -q "$1" -O "$2.part"
+    else
+        curl -fsSL "$1" -o "$2.part"
+    fi
+    mv "$2.part" "$2"
+}
+
+echo "==> Checking build tools"
+command -v python3 >/dev/null 2>&1 || die "python3 not found."
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' \
+    || die "Python 3.9 or newer is needed."
+python3 -m pip --version >/dev/null 2>&1 \
+    || die "pip isn't available for python3. Install it (the package is usually called python3-pip), or build inside a toolbox/distrobox container."
+command -v git >/dev/null 2>&1 || die "git not found."
+command -v wget >/dev/null 2>&1 || command -v curl >/dev/null 2>&1 \
+    || die "wget or curl is needed to download appimagetool."
 
 rm -rf "$BUILD"
 mkdir -p "$APP_ROOT" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
@@ -32,36 +61,62 @@ echo "    together with PYTHONHOME/PYTHONPATH in AppRun -- no venv"
 echo "    machinery, no assumptions about the host's Python layout."
 PYVER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 REAL_PYTHON="$(readlink -f "$(command -v python3)")"
+
+# Ask the running Python where its standard library and compiled modules
+# (lib-dynload) actually load from, instead of guessing. On Fedora (and
+# Bazzite) that's /usr/lib64/python3.x; /usr/lib/python3.x exists there too
+# but only holds add-on packages, so guessing /usr/lib first copied the
+# wrong folder. (-I: ignore any PYTHON* settings in this shell.)
+STDLIB="$(python3 -I -c 'import os; print(os.path.dirname(os.__file__))')"
+DYNLOAD="$(python3 -I -c 'import sys; print(next((p for p in sys.path if p.endswith("lib-dynload")), ""))')"
+
+# ...and where it will look for them once PYTHONHOME points at our runtime:
+# <PYTHONHOME>/<platlibdir>/python3.x, where platlibdir is "lib64" on
+# Fedora and "lib" on most other distros.
+PLATLIBDIR="$(python3 -I -c 'import sys; print(getattr(sys, "platlibdir", "lib"))')"
+
 RUNTIME="$APP_ROOT/pyruntime"
-mkdir -p "$RUNTIME/bin" "$RUNTIME/lib/python${PYVER}" "$RUNTIME/site-packages"
+RT_STDLIB="$RUNTIME/$PLATLIBDIR/python${PYVER}"
+mkdir -p "$RUNTIME/bin" "$RT_STDLIB" "$RUNTIME/site-packages"
 
 cp "$REAL_PYTHON" "$RUNTIME/bin/python3"
 chmod +x "$RUNTIME/bin/python3"
 
-SYSTEM_STDLIB="/usr/lib/python${PYVER}"
-if [ ! -d "$SYSTEM_STDLIB" ]; then
-    SYSTEM_STDLIB="/usr/lib64/python${PYVER}"
-fi
-for entry in "$SYSTEM_STDLIB"/*; do
+[ -f "$STDLIB/os.py" ] || die "Couldn't find Python's standard library (looked in $STDLIB)."
+for entry in "$STDLIB"/*; do
     base="$(basename "$entry")"
     case "$base" in
-        test|__pycache__|idlelib|tkinter|turtledemo) continue ;;
+        # Tests, IDE and GUI pieces the app never uses; the system's add-on
+        # packages (the app's own dependencies are installed separately
+        # below); and the static build library (large).
+        test|__pycache__|idlelib|tkinter|turtledemo|site-packages|dist-packages|config-*) continue ;;
     esac
-    cp -r "$entry" "$RUNTIME/lib/python${PYVER}/" 2>/dev/null || true
+    cp -r "$entry" "$RT_STDLIB/"
 done
-find "$RUNTIME/lib" -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+# Compiled modules usually sit inside the stdlib folder (copied above);
+# fetch them separately if this Python keeps them somewhere else.
+if [ -n "$DYNLOAD" ] && [ ! -d "$RT_STDLIB/lib-dynload" ]; then
+    cp -r "$DYNLOAD" "$RT_STDLIB/lib-dynload"
+fi
+find "$RUNTIME" -name "__pycache__" -prune -exec rm -rf {} +
+[ -d "$RT_STDLIB/lib-dynload" ] || die "Couldn't find Python's compiled modules (lib-dynload)."
 
 # Also grab the shared lib CPython needs to actually start (libpython3.x.so),
 # if it's a dynamically-linked build -- copy it alongside so it doesn't
 # depend on the host having a matching one on its linker path.
-LIBPYTHON="$( (ldconfig -p 2>/dev/null | grep -m1 "libpython${PYVER}" | awk '{print $NF}') || true )"
+LIBPYTHON=""
+while read -r name arrow path _; do
+    case "$name" in
+        libpython*) [ "$arrow" = "=>" ] && LIBPYTHON="$path"; break ;;
+    esac
+done < <(ldd "$REAL_PYTHON" 2>/dev/null || true)
 if [ -n "$LIBPYTHON" ] && [ -f "$LIBPYTHON" ]; then
     mkdir -p "$RUNTIME/libdyn"
     cp "$LIBPYTHON" "$RUNTIME/libdyn/"
 fi
 
 echo "==> Installing dependencies into the flat site-packages dir"
-python3 -m pip install --quiet --target="$RUNTIME/site-packages" flask bleak terminaltables
+python3 -m pip install --quiet --target="$RUNTIME/site-packages" -r "$HERE/requirements.txt"
 
 echo "==> Writing AppRun"
 cat > "$APPDIR/AppRun" <<'EOF'
@@ -82,6 +137,26 @@ exec "$RUNTIME/bin/python3" "$APP_SRC/server.py" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
+echo "==> Checking the bundled Python runs on its own"
+# Same setup AppRun uses, but with an empty environment so nothing from
+# this machine's own Python can cover up a missing piece. Imports the app
+# and the omblepy engine (with a throwaway data folder); nothing connects
+# to Bluetooth.
+SMOKE_DATA="$BUILD/smoke-test-data"
+if ! (cd "$APP_ROOT" && env -i HOME="$HOME" PATH="/usr/bin:/bin" \
+        BP_READER_DATA_DIR="$SMOKE_DATA" \
+        PYTHONHOME="$RUNTIME" PYTHONPATH="$RUNTIME/site-packages" PYTHONNOUSERSITE=1 \
+        LD_LIBRARY_PATH="$RUNTIME/libdyn" \
+        timeout 120 "$RUNTIME/bin/python3" -c '
+import sys
+import server, omron_reader
+omron_reader._load_omblepy_module()
+print("    OK: Python " + sys.version.split()[0] + ", app and omblepy import cleanly")
+'); then
+    die "The bundled Python couldn't start or load the app (see the error above), so the AppImage wasn't built."
+fi
+rm -rf "$SMOKE_DATA"
+
 echo "==> Writing desktop file + icon"
 cat > "$APPDIR/bpreader.desktop" <<'EOF'
 [Desktop Entry]
@@ -94,7 +169,19 @@ Categories=Utility;
 Terminal=false
 EOF
 
-python3 - <<'PYEOF'
+# The icon is drawn with Pillow, which is only needed here at build time
+# (it isn't bundled into the app). If this Python doesn't have it, fetch it
+# into a throwaway folder inside the build directory.
+ICON_TOOLS=""
+if ! python3 -c 'import PIL' >/dev/null 2>&1; then
+    ICON_TOOLS="$BUILD/icon-tools"
+    python3 -m pip install --quiet --target="$ICON_TOOLS" pillow
+fi
+python3 - "$APPDIR" "$ICON_TOOLS" <<'PYEOF'
+import sys
+appdir, tools = sys.argv[1], sys.argv[2]
+if tools:
+    sys.path.insert(0, tools)
 from PIL import Image, ImageDraw
 size = 256
 img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -106,15 +193,15 @@ pts_sys = [(36,160),(76,160),(96,96),(116,196),(136,64),(156,160),(220,160)]
 pts_dia = [(36,180),(76,178),(96,150),(116,190),(136,120),(156,175),(220,172)]
 d.line(pts_dia, fill=(90,127,174,255), width=7, joint='curve')
 d.line(pts_sys, fill=(124,147,201,255), width=9, joint='curve')
-for p in ["appimage_build/AppDir/usr/share/icons/hicolor/256x256/apps/bpreader.png",
-          "appimage_build/AppDir/bpreader.png"]:
+for p in [appdir + "/usr/share/icons/hicolor/256x256/apps/bpreader.png",
+          appdir + "/bpreader.png"]:
     img.save(p)
 PYEOF
 
 echo "==> Downloading appimagetool"
 if [ ! -f "$HERE/appimagetool.AppImage" ]; then
-    wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
-        -O "$HERE/appimagetool.AppImage"
+    download "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+        "$HERE/appimagetool.AppImage"
     chmod +x "$HERE/appimagetool.AppImage"
 fi
 

@@ -64,8 +64,9 @@ FUSE installed (Bazzite, some minimal distros, etc. — AppImages normally
 need FUSE to mount themselves; this sidesteps that entirely).
 
 Don't have the AppImage built yet? `./build_appimage.sh` builds it from
-source (needs internet for that one step; the result runs fully offline
-after that).
+source (needs python3 with pip, git, and wget or curl, plus internet for
+that one step; the result runs fully offline after that). Build it on the
+machine you'll run it on: it bundles that machine's own Python.
 
 ### Linux — plain install, no AppImage
 
